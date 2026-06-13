@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.github
+.scratch
+docs
+features
+coverage
+*.md
+.env
+.env*.local

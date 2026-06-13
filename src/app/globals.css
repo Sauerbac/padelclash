@@ -1,0 +1,15 @@
+/* Minimal base styles. The full design-system token layer (Tailwind v4,
+   ADR-0009) lands in slice 05 (ds-tokens-styleguide-primitives). */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>* { box-sizing: border-box; } body { margin: 0; }</style>
+</helmet>
+<div style="background:#F7EFE6;width:100%;min-height:100%;padding:34px 36px;font-family:'Space Grotesk',sans-serif;color:#17120D;display:flex;flex-direction:column;gap:22px;">
+  <div style="display:flex;align-items:baseline;gap:14px;">
+    <h2 style="margin:0;font-family:'Archivo Black',sans-serif;font-size:26px;letter-spacing:-.01em;">Edges &amp; elevation</h2>
+    <span style="font-size:14px;font-weight:600;color:#5a5043;">Hard borders, hard shadows — zero blur, ever</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+    <div style="border:3px solid #17120D;border-radius:16px;background:#fff;box-shadow:6px 6px 0 #17120D;padding:22px;display:flex;flex-direction:column;gap:16px;">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#5a5043;">Border weights</span>
+      <div style="display:flex;gap:12px;align-items:flex-end;">
+        <div style="flex:1;height:56px;border:2px solid #17120D;border-radius:11px;background:#F7EFE6;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;">2px</div>
+        <div style="flex:1;height:56px;border:2.5px solid #17120D;border-radius:11px;background:#F7EFE6;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;">2.5</div>
+        <div style="flex:1;height:56px;border:3px solid #17120D;border-radius:11px;background:#F7EFE6;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;">3px</div>
+        <div style="flex:1;height:56px;border:4px solid #17120D;border-radius:11px;background:#F7EFE6;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;">4px</div>
+      </div>
+      <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#5a5043;margin-top:2px;">Corner radius</span>
+      <div style="display:flex;gap:11px;align-items:center;flex-wrap:wrap;">
+        <div style="width:50px;height:50px;border:3px solid #17120D;border-radius:8px;background:#FCE0CE;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">8</div>
+        <div style="width:50px;height:50px;border:3px solid #17120D;border-radius:13px;background:#FCE0CE;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">13</div>
+        <div style="width:50px;height:50px;border:3px solid #17120D;border-radius:18px;background:#FCE0CE;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">18</div>
+        <div style="height:50px;padding:0 20px;border:3px solid #17120D;border-radius:30px;background:#FCE0CE;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;">30 · pill</div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5a5043;">8 score chips · 13 buttons · 16–20 cards · 30 pills · 40 device frame.</div>
+    </div>
+    <div style="border:3px solid #17120D;border-radius:16px;background:#fff;box-shadow:6px 6px 0 #17120D;padding:22px;display:flex;flex-direction:column;gap:16px;">
+      <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#5a5043;">Offset shadow · solid ink, 0 blur</span>
+      <div style="display:flex;gap:22px;align-items:flex-end;padding:6px 8px 12px;">
+        <div style="width:52px;height:52px;border:3px solid #17120D;border-radius:12px;background:#fff;box-shadow:3px 3px 0 #17120D;"></div>
+        <div style="width:52px;height:52px;border:3px solid #17120D;border-radius:12px;background:#fff;box-shadow:5px 5px 0 #17120D;"></div>
+        <div style="width:52px;height:52px;border:3px solid #17120D;border-radius:12px;background:#fff;box-shadow:8px 8px 0 #17120D;"></div>
+      </div>
+      <div style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#8a7f70;">3·3 resting   5·5 raised   8–10 hero</div>
+      <div style="font-size:12.5px;font-weight:600;color:#5a5043;">A colored shadow flags special cards — upsets, rivalries, confirm panels.</div>
+      <div style="display:flex;gap:14px;">
+        <div style="width:46px;height:46px;border:3px solid #17120D;border-radius:12px;background:#17120D;box-shadow:5px 5px 0 #F6601A;"></div>
+        <div style="width:46px;height:46px;border:3px solid #17120D;border-radius:12px;background:#fff;box-shadow:5px 5px 0 #7B6CF6;"></div>
+      </div>
+      <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#5a5043;margin-top:2px;">Spacing · 4px base grid</span>
+      <div style="display:flex;align-items:flex-end;gap:8px;">
+        <div style="width:8px;height:8px;background:#1FB9A6;border:2px solid #17120D;"></div>
+        <div style="width:12px;height:12px;background:#1FB9A6;border:2px solid #17120D;"></div>
+        <div style="width:18px;height:18px;background:#1FB9A6;border:2px solid #17120D;"></div>
+        <div style="width:24px;height:24px;background:#1FB9A6;border:2px solid #17120D;"></div>
+        <div style="width:30px;height:30px;background:#1FB9A6;border:2px solid #17120D;"></div>
+        <span style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#8a7f70;margin-left:6px;">8 · 12 · 18 · 24 · 30</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1000,&quot;height&quot;:480}}"></script>
+</body>
+</html>
