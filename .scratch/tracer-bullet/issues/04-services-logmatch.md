@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 
 ## What to build
 
@@ -6,11 +6,24 @@ Status: ready-for-agent
 
 ## Acceptance criteria
 
-- [ ] `logMatch({ groupId, players: [{side, playerId}], winnerSide, loggedBy })` succeeds and produces correct projection rows
-- [ ] Tier-3 Postgres integration test passes: tx rebuild output matches pure engine output byte-for-byte
-- [ ] Transaction rolls back on failure (no partial projection)
-- [ ] Casual matches are inserted but excluded from replay (no rating impact)
-- [ ] Voided matches are excluded from replay
+- [x] `logMatch({ groupId, players: [{side, playerId}], winnerSide, loggedBy })` succeeds and produces correct projection rows
+- [x] Tier-3 Postgres integration test passes: tx rebuild output matches pure engine output byte-for-byte
+- [x] Transaction rolls back on failure (no partial projection)
+- [x] Casual matches are inserted but excluded from replay (no rating impact)
+- [x] Voided matches are excluded from replay
+
+## Notes (implementation)
+
+- `services.logMatch` (`src/services/logMatch.ts`) — injectable `db` param so the
+  Tier-3 test targets `padelclash_test`; production uses the pooled `getDb()`.
+- App-side UUIDv7 generator added (`src/db/ids.ts`) for source-row ids, per the
+  schema convention; the time-ordered prefix doubles as the replay tiebreaker.
+- Tier-3 runs on a separate config (`vitest.integration.config.ts`,
+  `npm run test:integration`) so the pure commit gate stays DB-free. Bootstrap
+  (create `padelclash_test` + migrate + truncate-between) in `src/db/test-db.ts`.
+- One decision deferred: a freshly logged match is hardcoded `status: "confirmed"`
+  (replay ignores status except `voided`). Trust-mode-aware default is the
+  confirmation slice — see `docs/open-questions/03-new-match-confirmation-status.md`.
 
 ## Blocked by
 
