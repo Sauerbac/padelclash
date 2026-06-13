@@ -1,0 +1,30 @@
+# Local development only. Production runs on Coolify (ADR-0010), which provides
+# its own managed Postgres — this file never ships there. It exists so a fresh
+# clone gets a database with one command (`docker compose up -d --wait db`) and
+# no native Postgres install.
+#
+# Pinned to postgres:16 to match the intended Coolify version. If the Coolify
+# instance turns out to run a different major, reconcile both — dev/prod drift on
+# the database is a real footgun (see docs/open-questions/01-prod-postgres-version.md).
+
+services:
+  db:
+    image: postgres:16-alpine
+    # Credentials are intentionally trivial — this DB is local, disposable, and
+    # never exposed beyond localhost. Real credentials live only on Coolify.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: padelclash
+    ports:
+      - "5432:5432"
+    volumes:
+      - pc_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d padelclash"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pc_pgdata:
