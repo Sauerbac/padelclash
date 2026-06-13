@@ -18,4 +18,12 @@ Wire Better Auth with email+password authentication and email verification (Rese
 
 ## Notes
 
-Needs a Resend API key in `.env`. The slice codes AFK but verification requires the key.
+Build email behind an `EmailSender` port (ADR-0012): a `ResendEmailSender` for
+deployed environments and a `ConsoleEmailSender` (prints the verification/claim
+link to the server log) selected when `RESEND_API_KEY` is absent — so the
+register→verify flow is testable locally with **no Resend key**. A real key is
+only needed to exercise live mail delivery. Likewise, offer Google sign-in only
+when `GOOGLE_CLIENT_ID`/`_SECRET` are present; email+password is the primary
+path. Env vars (`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, etc.) are already in
+`.env.example`; this slice introduces the env-validation module that makes
+`BETTER_AUTH_SECRET` a required, fail-loud var.

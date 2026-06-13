@@ -21,7 +21,8 @@ Layer boundaries are lint-enforced (`eslint.config.mjs`); see
 
 A fresh clone goes from zero to a running, DB-backed app with **no secrets to
 obtain** — Postgres comes from Docker, and external services (Resend email,
-Google sign-in) degrade to dev-safe stubs when their keys are absent.
+Google sign-in) degrade to dev-safe stubs when their keys are absent
+(see [ADR-0012](docs/adr/0012-local-dev-real-db-stubbed-externals.md)).
 
 ```bash
 npm install
