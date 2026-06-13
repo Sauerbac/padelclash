@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 
 ## What to build
 
@@ -6,12 +6,12 @@ The pure `replayMatch(priorState, match) -> (nextState, perParticipantOutput[])`
 
 ## Acceptance criteria
 
-- [ ] `npm run test` runs pure tests in milliseconds with no DB dependency
-- [ ] Golden-master: one singles-match fixture produces exact expected `current_rating` and `rating_history`
-- [ ] Determinism: same log → byte-identical projection
-- [ ] Insertion-order independence: matches in any order → identical projection
-- [ ] Per-match conservation: deltas across both sides sum to zero
-- [ ] Idempotent rebuild: replaying twice yields identical rows
+- [x] `npm run test` runs pure tests in milliseconds with no DB dependency
+- [x] Golden-master: one singles-match fixture produces exact expected `current_rating` and `rating_history`
+- [x] Determinism: same log → byte-identical projection
+- [x] Insertion-order independence: matches in any order → identical projection
+- [x] Per-match conservation: deltas across both sides sum to zero
+- [x] Idempotent rebuild: replaying twice yields identical rows
 
 ## Blocked by
 
