@@ -107,10 +107,10 @@ export default function StyleguidePage() {
 
       <Section title="Leaderboard rows">
         <div className="flex flex-col">
-          <LeaderboardRow rank={1} name="Maria Soto" rating={1342} avatarColor="violet" trend="up" delta={12} />
-          <LeaderboardRow rank={2} name="Jordan Kim" rating={1288} avatarColor="teal" trend="flat" delta={0} />
-          <LeaderboardRow rank={3} name="Alex Rivera" rating={1124} avatarColor="primary" trend="down" delta={-8} you />
-          <LeaderboardRow rank={4} name="Sam Doe" rating={1090} avatarColor="butter" trend="up" delta={5} />
+          <LeaderboardRow rank={1} name="Maria Soto" rating={1342} avatarColor="violet" trend="up" delta={12} matchesPlayed={24} />
+          <LeaderboardRow rank={2} name="Jordan Kim" rating={1288} avatarColor="teal" trend="flat" delta={0} matchesPlayed={18} />
+          <LeaderboardRow rank={3} name="Alex Rivera" rating={1124} avatarColor="primary" trend="down" delta={-8} matchesPlayed={11} you />
+          <LeaderboardRow rank={4} name="Sam Doe" rating={1090} avatarColor="butter" trend="up" delta={5} matchesPlayed={9} />
           <LeaderboardRow rank={5} name="Robin Vega" rating={1003} avatarColor="teal" unranked unrankedLabel="1 of 3" />
         </div>
       </Section>

@@ -7,10 +7,20 @@
 // `db` is injectable (default the pooled client) so the Tier-3 integration test
 // can target `padelclash_test`, exactly as `logMatch` does.
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getDb, type Database } from "@/db/client";
 import { newId } from "@/db/ids";
-import { currentRating, group, membership, player, user } from "@/db/schema";
+import {
+  currentRating,
+  group,
+  match,
+  matchParticipant,
+  membership,
+  player,
+  ratingHistory,
+  user,
+} from "@/db/schema";
+import type { MatchSide } from "@/domain/rating/engine";
 
 export interface CreateGroupInput {
   name: string;
@@ -271,4 +281,137 @@ export async function getRoster(
     role: r.role,
     isUnclaimed: r.claimedUserId === null,
   }));
+}
+
+/** One entry in the group's match history — the view-model a MatchResultBlock needs. */
+export interface RecentMatch {
+  matchId: string;
+  playedAt: Date;
+  /** Casual matches show a label and never moved any rating (ADR-0007 replay skips them). */
+  classification: "competitive" | "casual";
+  /** Display names per side; one (singles) or two (doubles). */
+  sideA: string[];
+  sideB: string[];
+  winnerSide: MatchSide;
+}
+
+/**
+ * The group's recent matches, newest first — the board's activity strip
+ * (screens.md §2). Reads the source-of-truth `match` + `match_participant` (not the
+ * projection), joined to `player` for names; voided matches are excluded, casual
+ * ones kept and flagged. Mirrors `logMatch`'s stream load, shaped for display: this
+ * is how a Casual match "appears in history" while leaving the leaderboard untouched.
+ */
+export async function getRecentMatches(
+  groupId: string,
+  limit = 20,
+  db: Database = getDb(),
+): Promise<RecentMatch[]> {
+  const matchRows = await db
+    .select({
+      id: match.id,
+      playedAt: match.playedAt,
+      classification: match.classification,
+      winnerSide: match.winnerSide,
+    })
+    .from(match)
+    .where(and(eq(match.groupId, groupId), ne(match.status, "voided")))
+    .orderBy(desc(match.playedAt))
+    .limit(limit);
+  if (matchRows.length === 0) return [];
+
+  const participantRows = await db
+    .select({
+      matchId: matchParticipant.matchId,
+      side: matchParticipant.side,
+      name: player.displayName,
+    })
+    .from(matchParticipant)
+    .innerJoin(player, eq(player.id, matchParticipant.playerId))
+    .where(
+      inArray(
+        matchParticipant.matchId,
+        matchRows.map((m) => m.id),
+      ),
+    );
+
+  const sidesByMatch = new Map<string, { A: string[]; B: string[] }>();
+  for (const m of matchRows) sidesByMatch.set(m.id, { A: [], B: [] });
+  for (const p of participantRows) sidesByMatch.get(p.matchId)![p.side].push(p.name);
+
+  return matchRows.map((m) => {
+    if (m.winnerSide === null) {
+      // Every match has a winner (ADR-0003); a null here is a corrupt row.
+      throw new Error(`getRecentMatches: match ${m.id} has no winner`);
+    }
+    const sides = sidesByMatch.get(m.id)!;
+    return {
+      matchId: m.id,
+      playedAt: m.playedAt,
+      classification: m.classification,
+      sideA: sides.A,
+      sideB: sides.B,
+      winnerSide: m.winnerSide,
+    };
+  });
+}
+
+/** A Player's standing within one group — what their Profile reads. */
+export interface PlayerStanding {
+  /** Full-precision rating from the projection; the route rounds for display. */
+  rating: number;
+  competitiveMatchesPlayed: number;
+  isRanked: boolean;
+  isProvisional: boolean;
+  /** Signed change from their most recent competitive match, or null if none yet. */
+  lastDelta: number | null;
+}
+
+/**
+ * One Player's standing in a group, or null if they have no rated match yet. Reads
+ * the `current_rating` projection for the number, and the latest `rating_history`
+ * row (by `played_at`) for the delta pill (screens.md §6 — the "+14!" payoff).
+ * `rating_history` holds competitive matches only (casual matches never produce a
+ * row), so `lastDelta` is always the last *rating-affecting* result.
+ */
+export async function getPlayerStanding(
+  args: { groupId: string; playerId: string },
+  db: Database = getDb(),
+): Promise<PlayerStanding | null> {
+  const [rating] = await db
+    .select({
+      rating: currentRating.rating,
+      competitiveMatchesPlayed: currentRating.competitiveMatchesPlayed,
+      isRanked: currentRating.isRanked,
+      isProvisional: currentRating.isProvisional,
+    })
+    .from(currentRating)
+    .where(
+      and(
+        eq(currentRating.groupId, args.groupId),
+        eq(currentRating.playerId, args.playerId),
+      ),
+    )
+    .limit(1);
+  if (!rating) return null;
+
+  const [last] = await db
+    .select({ delta: ratingHistory.delta })
+    .from(ratingHistory)
+    .where(
+      and(
+        eq(ratingHistory.groupId, args.groupId),
+        eq(ratingHistory.playerId, args.playerId),
+      ),
+    )
+    .orderBy(desc(ratingHistory.playedAt))
+    .limit(1);
+
+  return {
+    rating: Number(rating.rating),
+    competitiveMatchesPlayed: rating.competitiveMatchesPlayed,
+    isRanked: rating.isRanked,
+    isProvisional: rating.isProvisional,
+    lastDelta: last ? Number(last.delta) : null,
+  };
 }

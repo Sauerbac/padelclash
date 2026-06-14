@@ -17,6 +17,11 @@ type LeaderboardRowProps = {
   unranked?: boolean;
   /** e.g. "1 of 3" — shown instead of a rank number when unranked. */
   unrankedLabel?: string;
+  /**
+   * Competitive matches played. Shown as a sub-line on ranked rows; on unranked
+   * rows the "N of threshold" rank label already carries the count, so it's omitted.
+   */
+  matchesPlayed?: number;
   className?: string;
 };
 
@@ -40,6 +45,7 @@ export function LeaderboardRow({
   you = false,
   unranked = false,
   unrankedLabel,
+  matchesPlayed,
   className,
 }: LeaderboardRowProps) {
   return (
@@ -64,8 +70,14 @@ export function LeaderboardRow({
         {unranked && unrankedLabel ? unrankedLabel : `#${rank}`}
       </span>
 
-      <span className="min-w-0 flex-1">
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <PlayerChip name={name} avatarColor={avatarColor} />
+        {!unranked && matchesPlayed !== undefined && (
+          // pl-14 aligns under the name, past the 44px avatar + 12px gap.
+          <span className="pl-14 font-mono text-meta font-bold uppercase tracking-wide text-secondary">
+            {matchesPlayed} {matchesPlayed === 1 ? "match" : "matches"}
+          </span>
+        )}
       </span>
 
       <span className="flex flex-none items-center gap-2">

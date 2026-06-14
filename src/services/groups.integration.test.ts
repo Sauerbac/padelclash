@@ -9,13 +9,24 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { newId } from "@/db/ids";
 import { setupTestDb, type TestDb } from "@/db/test-db";
-import { currentRating, group, membership, player, user } from "@/db/schema";
+import {
+  currentRating,
+  group,
+  match,
+  matchParticipant,
+  membership,
+  player,
+  ratingHistory,
+  user,
+} from "@/db/schema";
 import {
   addUnclaimedPlayer,
   createGroup,
   DuplicateMemberNameError,
   getGroupForMember,
   getLeaderboard,
+  getPlayerStanding,
+  getRecentMatches,
   getRoster,
   listMemberGroups,
 } from "./groups";
@@ -358,5 +369,188 @@ describe("getRoster", () => {
 
     const roster = await getRoster(groupId, tdb.db);
     expect(roster.map((m) => m.name)).toEqual(["Ada Lovelace"]);
+  });
+});
+
+/** Fixed epoch base so timestamps are deterministic (no clock read). */
+function at(minute: number): Date {
+  return new Date(Date.UTC(2026, 0, 1, 0, minute, 0));
+}
+
+/** Insert one singles `match` + its two participants directly (source of truth). */
+async function seedMatch(args: {
+  groupId: string;
+  a: string;
+  b: string;
+  winner: "A" | "B";
+  loggedBy: string;
+  playedAt: Date;
+  classification?: "competitive" | "casual";
+  status?: "confirmed" | "voided";
+}): Promise<string> {
+  const id = newId();
+  await tdb.db.insert(match).values({
+    id,
+    groupId: args.groupId,
+    playedAt: args.playedAt,
+    loggedBy: args.loggedBy,
+    classification: args.classification ?? "competitive",
+    status: args.status ?? "confirmed",
+    resultFormat: "simple",
+    result: {},
+    winnerSide: args.winner,
+  });
+  await tdb.db.insert(matchParticipant).values([
+    { matchId: id, playerId: args.a, side: "A" },
+    { matchId: id, playerId: args.b, side: "B" },
+  ]);
+  return id;
+}
+
+describe("getRecentMatches — reads the source-of-truth match log", () => {
+  it("is empty for a group with no matches", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const { groupId } = await createGroup(
+      { name: "Quiet", founderPlayerId: founder },
+      tdb.db,
+    );
+    expect(await getRecentMatches(groupId, 20, tdb.db)).toEqual([]);
+  });
+
+  it("returns matches newest first with side names, winner, and the casual flag", async () => {
+    const ada = await seedPlayer("Ada Lovelace");
+    const babbage = await seedPlayer("Charles Babbage");
+    const { groupId } = await createGroup(
+      { name: "Logged", founderPlayerId: ada },
+      tdb.db,
+    );
+
+    await seedMatch({
+      groupId,
+      a: ada,
+      b: babbage,
+      winner: "A",
+      loggedBy: ada,
+      playedAt: at(0),
+    });
+    await seedMatch({
+      groupId,
+      a: ada,
+      b: babbage,
+      winner: "B",
+      loggedBy: babbage,
+      playedAt: at(10),
+      classification: "casual",
+    });
+
+    const recent = await getRecentMatches(groupId, 20, tdb.db);
+    expect(recent).toHaveLength(2);
+
+    // Newest (the casual one, played at minute 10) comes first.
+    expect(recent[0]).toMatchObject({
+      classification: "casual",
+      sideA: ["Ada Lovelace"],
+      sideB: ["Charles Babbage"],
+      winnerSide: "B",
+    });
+    expect(recent[1]).toMatchObject({
+      classification: "competitive",
+      winnerSide: "A",
+    });
+  });
+
+  it("excludes voided matches and honors the limit", async () => {
+    const ada = await seedPlayer("Ada Lovelace");
+    const babbage = await seedPlayer("Charles Babbage");
+    const { groupId } = await createGroup(
+      { name: "Pruned", founderPlayerId: ada },
+      tdb.db,
+    );
+
+    await seedMatch({ groupId, a: ada, b: babbage, winner: "A", loggedBy: ada, playedAt: at(0) });
+    await seedMatch({ groupId, a: ada, b: babbage, winner: "B", loggedBy: ada, playedAt: at(1) });
+    await seedMatch({
+      groupId,
+      a: ada,
+      b: babbage,
+      winner: "A",
+      loggedBy: ada,
+      playedAt: at(2),
+      status: "voided",
+    });
+
+    // Voided one is gone; the limit caps the rest.
+    expect(await getRecentMatches(groupId, 20, tdb.db)).toHaveLength(2);
+    expect(await getRecentMatches(groupId, 1, tdb.db)).toHaveLength(1);
+  });
+});
+
+describe("getPlayerStanding — the profile's group standing", () => {
+  it("returns null when the player has no rated match yet", async () => {
+    const ada = await seedPlayer("Ada Lovelace");
+    const { groupId } = await createGroup(
+      { name: "Fresh", founderPlayerId: ada },
+      tdb.db,
+    );
+    expect(
+      await getPlayerStanding({ groupId, playerId: ada }, tdb.db),
+    ).toBeNull();
+  });
+
+  it("returns the rating and the most recent match's delta", async () => {
+    const ada = await seedPlayer("Ada Lovelace");
+    const babbage = await seedPlayer("Charles Babbage");
+    const { groupId } = await createGroup(
+      { name: "Rated", founderPlayerId: ada },
+      tdb.db,
+    );
+
+    await tdb.db.insert(currentRating).values({
+      groupId,
+      playerId: ada,
+      rating: "1032.5",
+      competitiveMatchesPlayed: 2,
+      isProvisional: true,
+      isRanked: false,
+    });
+
+    // Two history rows; the standing's delta must be the later one (minute 10).
+    const older = await seedMatch({ groupId, a: ada, b: babbage, winner: "A", loggedBy: ada, playedAt: at(0) });
+    const newer = await seedMatch({ groupId, a: ada, b: babbage, winner: "A", loggedBy: ada, playedAt: at(10) });
+    await tdb.db.insert(ratingHistory).values([
+      {
+        groupId,
+        matchId: older,
+        playerId: ada,
+        side: "A",
+        ratingBefore: "1000",
+        delta: "16",
+        ratingAfter: "1016",
+        wasProvisional: true,
+        winProbability: "0.5",
+        playedAt: at(0),
+      },
+      {
+        groupId,
+        matchId: newer,
+        playerId: ada,
+        side: "A",
+        ratingBefore: "1016",
+        delta: "16.5",
+        ratingAfter: "1032.5",
+        wasProvisional: true,
+        winProbability: "0.5",
+        playedAt: at(10),
+      },
+    ]);
+
+    const standing = await getPlayerStanding({ groupId, playerId: ada }, tdb.db);
+    expect(standing).toMatchObject({
+      rating: 1032.5,
+      competitiveMatchesPlayed: 2,
+      isRanked: false,
+      isProvisional: true,
+      lastDelta: 16.5,
+    });
   });
 });

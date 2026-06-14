@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePlayerId } from "@/auth";
-import { getGroupForMember, getLeaderboard, getRoster } from "@/services/groups";
-import { LeaderboardRow, PlayerChip } from "@/ui";
+import {
+  getGroupForMember,
+  getLeaderboard,
+  getRecentMatches,
+  getRoster,
+} from "@/services/groups";
+import { LeaderboardRow, MatchResultBlock, PlayerChip } from "@/ui";
 import type { AvatarColor } from "@/ui";
 import { GroupHeader } from "@/app/_shell/GroupHeader";
 import { AddPlayerForm } from "./AddPlayerForm";
@@ -38,15 +44,25 @@ export default async function GroupBoardPage({
   const group = await getGroupForMember({ groupId, playerId });
   if (!group) notFound();
 
-  const [entries, roster] = await Promise.all([
+  const [entries, roster, recent] = await Promise.all([
     getLeaderboard(groupId),
     getRoster(groupId),
+    getRecentMatches(groupId),
   ]);
 
   return (
     <>
       <GroupHeader name={group.name} />
       <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-6 pt-6 pb-24">
+        {/* The one sacred interaction (screens.md §0): logging a match is the most
+            prominent action, always visible without scrolling. */}
+        <Link
+          href="/log"
+          className="inline-flex min-h-11 select-none items-center justify-center rounded-button border-bold border-ink bg-primary px-6 font-display text-title text-ink shadow-button active:translate-x-px active:translate-y-px"
+        >
+          Log a match
+        </Link>
+
         <section className="flex flex-col gap-4">
           <h2 className="font-mono text-meta font-bold uppercase tracking-wide text-secondary">
             Leaderboard
@@ -72,6 +88,7 @@ export default async function GroupBoardPage({
                   you={entry.playerId === playerId}
                   unranked={!entry.isRanked}
                   unrankedLabel={`${entry.competitiveMatchesPlayed} of ${group.rankedThreshold}`}
+                  matchesPlayed={entry.competitiveMatchesPlayed}
                 />
               ))}
             </div>
@@ -98,6 +115,25 @@ export default async function GroupBoardPage({
 
           <AddPlayerForm groupId={groupId} />
         </section>
+
+        {recent.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="font-mono text-meta font-bold uppercase tracking-wide text-secondary">
+              Recent matches
+            </h2>
+
+            <div className="flex flex-col gap-4">
+              {recent.map((m) => (
+                <MatchResultBlock
+                  key={m.matchId}
+                  sideA={{ players: m.sideA, won: m.winnerSide === "A" }}
+                  sideB={{ players: m.sideB, won: m.winnerSide === "B" }}
+                  casual={m.classification === "casual"}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </>
   );
