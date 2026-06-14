@@ -28,12 +28,14 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
+    "@tailwindcss/postcss": "^4.3.1",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "drizzle-kit": "^0.28.1",
     "eslint": "^9.16.0",
     "eslint-config-next": "^15.1.0",
+    "tailwindcss": "^4.3.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

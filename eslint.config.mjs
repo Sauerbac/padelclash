@@ -8,6 +8,51 @@ const __dirname = dirname(__filename);
 const compat = new FlatCompat({ baseDirectory: __dirname });
 
 /**
+ * The literal-style-value fence (ADR-0009, design-system-binding.md §3.1).
+ * Every color/edge/spacing value lives once in the @theme block; components
+ * reference tokens only. These selectors reject the three ways a raw value
+ * sneaks into `src/ui` / `src/app` — in plain strings and template strings:
+ *   1. raw hex colors (#F6601A)
+ *   2. raw px / rem lengths (3px, 1.5rem)
+ *   3. Tailwind arbitrary-value brackets (border-[3px], bg-[#fff], shadow-[…])
+ * The one legal home for a literal is globals.css (@theme / @utility), which
+ * lint does not touch. Computed numeric geometry via inline style is the §4
+ * carve-out — allowed in `ui`, banned in `app` screens (rule below).
+ */
+const NO_LITERAL_STYLE_VALUES = [
+  {
+    selector: "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+    message:
+      "Raw hex color — reference a design token instead (ADR-0009, e.g. bg-primary).",
+  },
+  {
+    selector: "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]",
+    message:
+      "Raw hex color — reference a design token instead (ADR-0009, e.g. bg-primary).",
+  },
+  {
+    selector: "Literal[value=/\\b\\d+(\\.\\d+)?(px|rem)\\b/]",
+    message:
+      "Raw px/rem — use a token utility or the 4px spacing scale (ADR-0009).",
+  },
+  {
+    selector: "TemplateElement[value.raw=/\\b\\d+(\\.\\d+)?(px|rem)\\b/]",
+    message:
+      "Raw px/rem — use a token utility or the 4px spacing scale (ADR-0009).",
+  },
+  {
+    selector: "Literal[value=/-\\[/]",
+    message:
+      "Tailwind arbitrary value — add a token in @theme and use its utility (ADR-0009).",
+  },
+  {
+    selector: "TemplateElement[value.raw=/-\\[/]",
+    message:
+      "Tailwind arbitrary value — add a token in @theme and use its utility (ADR-0009).",
+  },
+];
+
+/**
  * Module boundaries are lint-enforced, not merely conventional
  * (docs/architecture/module-structure.md, ADR-0008). CI fails on a violation,
  * so the two pure leaves of the app — `domain` and `ui` — stay pure.
@@ -107,6 +152,32 @@ const eslintConfig = [
             { target: "./src/ui", from: "./src/domain", message: "ui takes view-model props, never a domain entity (module-structure.md)." },
             { target: "./src/ui", from: "./src/app", message: "ui must not import app." },
           ],
+        },
+      ],
+    },
+  },
+
+  // Literal-style-value fence: no raw hex / px / arbitrary brackets in the two
+  // token-consuming layers (ADR-0009, design-system-binding.md §3.1).
+  {
+    files: ["src/ui/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", ...NO_LITERAL_STYLE_VALUES],
+    },
+  },
+
+  // App screens compose tokens + primitives only — no inline style. The §4
+  // computed-geometry carve-out lives in `src/ui`, not here.
+  {
+    files: ["src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...NO_LITERAL_STYLE_VALUES,
+        {
+          selector: "JSXAttribute[name.name='style']",
+          message:
+            "No inline style in app screens — go through tokens/primitives (design-system-binding.md §3.3).",
         },
       ],
     },
