@@ -20,11 +20,13 @@
     "setup": "node scripts/setup.mjs"
   },
   "dependencies": {
+    "better-auth": "^1.6.18",
     "drizzle-orm": "^0.36.4",
     "next": "^15.1.0",
     "postgres": "^3.4.5",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "resend": "^6.12.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
