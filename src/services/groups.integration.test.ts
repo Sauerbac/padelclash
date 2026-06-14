@@ -9,11 +9,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { newId } from "@/db/ids";
 import { setupTestDb, type TestDb } from "@/db/test-db";
-import { currentRating, group, membership, player } from "@/db/schema";
+import { currentRating, group, membership, player, user } from "@/db/schema";
 import {
+  addUnclaimedPlayer,
   createGroup,
+  DuplicateMemberNameError,
   getGroupForMember,
   getLeaderboard,
+  getRoster,
   listMemberGroups,
 } from "./groups";
 
@@ -34,6 +37,16 @@ async function seedPlayer(displayName: string): Promise<string> {
   const id = newId();
   await tdb.db.insert(player).values({ id, displayName });
   return id;
+}
+
+/** Attach an auth Account to a Player — i.e. make them a claimed Player. */
+async function attachAccount(playerId: string, email: string): Promise<void> {
+  await tdb.db.insert(user).values({
+    id: newId(),
+    name: email,
+    email,
+    playerId,
+  });
 }
 
 describe("createGroup", () => {
@@ -168,5 +181,182 @@ describe("getLeaderboard — reads current_rating", () => {
     expect(board[0].isRanked).toBe(true);
     expect(board[1].rating).toBe(1016);
     expect(board[1].competitiveMatchesPlayed).toBe(1);
+  });
+});
+
+describe("addUnclaimedPlayer", () => {
+  it("creates a Player no user references and seats them as an active member", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const { groupId } = await createGroup(
+      { name: "Smashers", founderPlayerId: founder },
+      tdb.db,
+    );
+
+    const { playerId } = await addUnclaimedPlayer(
+      { groupId, displayName: "Cousin Max", addedByPlayerId: founder },
+      tdb.db,
+    );
+
+    // A `player` row exists…
+    const [p] = await tdb.db.select().from(player).where(eq(player.id, playerId));
+    expect(p.displayName).toBe("Cousin Max");
+
+    // …with no auth `user` pointing at it (still Unclaimed — ADR-0004)…
+    const accounts = await tdb.db
+      .select()
+      .from(user)
+      .where(eq(user.playerId, playerId));
+    expect(accounts).toHaveLength(0);
+
+    // …and a membership joining them to the group as a plain active member.
+    const [mem] = await tdb.db
+      .select()
+      .from(membership)
+      .where(
+        and(eq(membership.groupId, groupId), eq(membership.playerId, playerId)),
+      );
+    expect(mem.role).toBe("member");
+    expect(mem.status).toBe("active");
+  });
+
+  it("trims the name and rejects an empty one", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const { groupId } = await createGroup(
+      { name: "Trimmers", founderPlayerId: founder },
+      tdb.db,
+    );
+
+    const { playerId } = await addUnclaimedPlayer(
+      { groupId, displayName: "  Padel Pete  ", addedByPlayerId: founder },
+      tdb.db,
+    );
+    const [p] = await tdb.db.select().from(player).where(eq(player.id, playerId));
+    expect(p.displayName).toBe("Padel Pete");
+
+    await expect(
+      addUnclaimedPlayer(
+        { groupId, displayName: "   ", addedByPlayerId: founder },
+        tdb.db,
+      ),
+    ).rejects.toThrow(/displayName is required/);
+  });
+
+  it("rejects a duplicate name in the same group, case-insensitively", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const { groupId } = await createGroup(
+      { name: "Dupes", founderPlayerId: founder },
+      tdb.db,
+    );
+
+    await addUnclaimedPlayer(
+      { groupId, displayName: "Max", addedByPlayerId: founder },
+      tdb.db,
+    );
+
+    await expect(
+      addUnclaimedPlayer(
+        { groupId, displayName: "  max  ", addedByPlayerId: founder },
+        tdb.db,
+      ),
+    ).rejects.toBeInstanceOf(DuplicateMemberNameError);
+  });
+
+  it("allows the same name in a different group", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const other = await seedPlayer("Grace Hopper");
+    const { groupId: a } = await createGroup(
+      { name: "Group A", founderPlayerId: founder },
+      tdb.db,
+    );
+    const { groupId: b } = await createGroup(
+      { name: "Group B", founderPlayerId: other },
+      tdb.db,
+    );
+
+    await addUnclaimedPlayer(
+      { groupId: a, displayName: "Max", addedByPlayerId: founder },
+      tdb.db,
+    );
+    await expect(
+      addUnclaimedPlayer(
+        { groupId: b, displayName: "Max", addedByPlayerId: other },
+        tdb.db,
+      ),
+    ).resolves.toMatchObject({ playerId: expect.any(String) });
+  });
+
+  it("rejects an adder who is not an active member", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const outsider = await seedPlayer("Stranger");
+    const { groupId } = await createGroup(
+      { name: "Members Only", founderPlayerId: founder },
+      tdb.db,
+    );
+
+    await expect(
+      addUnclaimedPlayer(
+        { groupId, displayName: "Sneaky Sam", addedByPlayerId: outsider },
+        tdb.db,
+      ),
+    ).rejects.toThrow(/not an active member/);
+
+    // Nothing was inserted — the player never exists.
+    const all = await tdb.db
+      .select()
+      .from(player)
+      .where(eq(player.displayName, "Sneaky Sam"));
+    expect(all).toHaveLength(0);
+  });
+});
+
+describe("getRoster", () => {
+  it("lists active members in join order, flagging unclaimed players", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    await attachAccount(founder, "ada@example.com"); // founder is a claimed Player
+    const { groupId } = await createGroup(
+      { name: "Rostered", founderPlayerId: founder },
+      tdb.db,
+    );
+
+    const { playerId: maxId } = await addUnclaimedPlayer(
+      { groupId, displayName: "Cousin Max", addedByPlayerId: founder },
+      tdb.db,
+    );
+
+    const roster = await getRoster(groupId, tdb.db);
+
+    expect(roster.map((m) => m.name)).toEqual(["Ada Lovelace", "Cousin Max"]);
+    expect(roster[0]).toMatchObject({
+      playerId: founder,
+      role: "admin",
+      isUnclaimed: false,
+    });
+    expect(roster[1]).toMatchObject({
+      playerId: maxId,
+      role: "member",
+      isUnclaimed: true,
+    });
+  });
+
+  it("excludes former members", async () => {
+    const founder = await seedPlayer("Ada Lovelace");
+    const { groupId } = await createGroup(
+      { name: "Departures", founderPlayerId: founder },
+      tdb.db,
+    );
+    const { playerId: leaverId } = await addUnclaimedPlayer(
+      { groupId, displayName: "Leaver Lou", addedByPlayerId: founder },
+      tdb.db,
+    );
+
+    await tdb.db
+      .update(membership)
+      .set({ status: "former" })
+      .where(
+        and(eq(membership.groupId, groupId), eq(membership.playerId, leaverId)),
+      );
+
+    const roster = await getRoster(groupId, tdb.db);
+    expect(roster.map((m) => m.name)).toEqual(["Ada Lovelace"]);
   });
 });

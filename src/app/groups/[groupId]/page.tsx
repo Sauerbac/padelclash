@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requirePlayerId } from "@/auth";
-import { getGroupForMember, getLeaderboard } from "@/services/groups";
-import { LeaderboardRow } from "@/ui";
+import { getGroupForMember, getLeaderboard, getRoster } from "@/services/groups";
+import { LeaderboardRow, PlayerChip } from "@/ui";
 import type { AvatarColor } from "@/ui";
 import { GroupHeader } from "@/app/_shell/GroupHeader";
+import { AddPlayerForm } from "./AddPlayerForm";
 
 // Reads the live session + projection, so it must stay dynamic.
 export const dynamic = "force-dynamic";
@@ -37,40 +38,66 @@ export default async function GroupBoardPage({
   const group = await getGroupForMember({ groupId, playerId });
   if (!group) notFound();
 
-  const entries = await getLeaderboard(groupId);
+  const [entries, roster] = await Promise.all([
+    getLeaderboard(groupId),
+    getRoster(groupId),
+  ]);
 
   return (
     <>
       <GroupHeader name={group.name} />
-      <main className="mx-auto flex w-full max-w-md flex-col gap-4 px-6 pt-6 pb-24">
-        <h2 className="font-mono text-meta font-bold uppercase tracking-wide text-secondary">
-          Leaderboard
-        </h2>
+      <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-6 pt-6 pb-24">
+        <section className="flex flex-col gap-4">
+          <h2 className="font-mono text-meta font-bold uppercase tracking-wide text-secondary">
+            Leaderboard
+          </h2>
 
-        {entries.length === 0 ? (
-          <div className="flex flex-col gap-2 rounded-card border-bold border-ink bg-surface px-5 py-8 text-center">
-            <p className="font-display text-title text-ink">No ratings yet</p>
-            <p className="font-body text-body text-secondary">
-              Add players and log your first match — the leaderboard fills in as
-              soon as a competitive match is played.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {entries.map((entry, i) => (
-              <LeaderboardRow
-                key={entry.playerId}
-                rank={i + 1}
-                name={entry.name}
-                rating={Math.round(entry.rating)}
-                avatarColor={AVATAR_COLORS[i % AVATAR_COLORS.length]}
-                you={entry.playerId === playerId}
-                unranked={!entry.isRanked}
-                unrankedLabel={`${entry.competitiveMatchesPlayed} of ${group.rankedThreshold}`}
-              />
+          {entries.length === 0 ? (
+            <div className="flex flex-col gap-2 rounded-card border-bold border-ink bg-surface px-5 py-8 text-center">
+              <p className="font-display text-title text-ink">No ratings yet</p>
+              <p className="font-body text-body text-secondary">
+                Add players and log your first match — the leaderboard fills in as
+                soon as a competitive match is played.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {entries.map((entry, i) => (
+                <LeaderboardRow
+                  key={entry.playerId}
+                  rank={i + 1}
+                  name={entry.name}
+                  rating={Math.round(entry.rating)}
+                  avatarColor={AVATAR_COLORS[i % AVATAR_COLORS.length]}
+                  you={entry.playerId === playerId}
+                  unranked={!entry.isRanked}
+                  unrankedLabel={`${entry.competitiveMatchesPlayed} of ${group.rankedThreshold}`}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <h2 className="font-mono text-meta font-bold uppercase tracking-wide text-secondary">
+            Roster
+          </h2>
+
+          <ul className="flex flex-col gap-3">
+            {roster.map((member, i) => (
+              <li key={member.playerId}>
+                <PlayerChip
+                  name={member.name}
+                  avatarColor={AVATAR_COLORS[i % AVATAR_COLORS.length]}
+                  you={member.playerId === playerId}
+                  variant={member.isUnclaimed ? "unclaimed" : "default"}
+                />
+              </li>
             ))}
-          </div>
-        )}
+          </ul>
+
+          <AddPlayerForm groupId={groupId} />
+        </section>
       </main>
     </>
   );
