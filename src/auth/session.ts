@@ -20,3 +20,17 @@ export async function requireSession() {
   if (!session) redirect("/login");
   return session;
 }
+
+/**
+ * The viewing Player's id, or a redirect to /login. Every Account is linked to
+ * exactly one Player by the not-null `user.player_id` FK (ADR-0004), so a signed-in
+ * session always resolves a player id; the guard is the fail-loud backstop. This is
+ * the seam most route components and Server Actions actually need — the domain keys
+ * on Player, not Account.
+ */
+export async function requirePlayerId(): Promise<string> {
+  const session = await requireSession();
+  const playerId = session.user.playerId;
+  if (!playerId) redirect("/login");
+  return playerId;
+}

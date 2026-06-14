@@ -8,12 +8,20 @@ import type { ReactNode } from "react";
 // because it is inherently route-aware (Link + usePathname). It is *composed
 // from* the design tokens, keeping the ui fence strict (binding §2).
 
-type Tab = { href: string; label: string; icon: ReactNode };
+type Tab = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  /** Extra path prefixes that should also light this tab (e.g. group routes). */
+  activePrefixes?: string[];
+};
 
 const TABS: Tab[] = [
   {
     href: "/",
     label: "Board",
+    // Home redirects into the current group, so /groups/* is the Board context.
+    activePrefixes: ["/groups"],
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M6 9h12M6 9a4 4 0 0 1-4-4h4m12 4a4 4 0 0 0 4-4h-4M9 9v4a3 3 0 0 0 6 0V9M9 4h6v5H9zM10 20h4M12 16v4" />
@@ -41,8 +49,9 @@ const TABS: Tab[] = [
   },
 ];
 
-function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+function isActive(pathname: string, tab: Tab): boolean {
+  const onHref = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+  return onHref || (tab.activePrefixes?.some((p) => pathname.startsWith(p)) ?? false);
 }
 
 export function TabBar() {
@@ -54,7 +63,7 @@ export function TabBar() {
       className="fixed inset-x-0 bottom-0 z-10 flex border-t-2 border-ink bg-surface"
     >
       {TABS.map((tab) => {
-        const active = isActive(pathname, tab.href);
+        const active = isActive(pathname, tab);
         return (
           <Link
             key={tab.href}
