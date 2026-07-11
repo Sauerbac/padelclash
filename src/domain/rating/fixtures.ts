@@ -1,11 +1,10 @@
 // Test support for the rating engine: the hand-verified golden-master fixtures
-// (Tier 1) and the seeded random-log generator + canonical serializer used by
-// the property tests (Tier 2). Pure domain code — imported only by *.test.ts.
+// and the seeded random-log generator + canonical serializer used by the
+// property tests. Pure domain code — imported only by *.test.ts.
 //
 // Expected numbers in the golden masters are computed mechanically from the
 // formula and stated here as independent literals (not re-derived from the
-// engine), so a formula change shows up as a test diff to be reviewed — the
-// "reviewed blast radius" of ADR-0008 / rating-engine.md.
+// engine), so a formula change shows up as a test diff to be reviewed.
 
 import type { EngineMatch, GroupProjection, MatchSide, PlayerId } from "./engine";
 

@@ -1,35 +1,36 @@
-// The pure rating engine — the realization of ADR-0001 (ratings are derived by
-// replaying the match log) and the rating-engine design reference.
+// The pure rating engine — ratings are derived by replaying the match log
+// (docs/padelclash-lite-spec.md, "Rating engine"). Carried over verbatim from
+// the pre-Lite codebase.
 //
-// This module is FRAMEWORK-FREE: no Next, no Drizzle, no src/db (lint-enforced,
-// module-structure.md). It is testable in milliseconds with no infrastructure
-// (ADR-0008 tiers 1–2). The transaction that persists its output lives one layer
-// up, in services/ — never here.
+// This module is FRAMEWORK-FREE: no Next, no Drizzle, no src/db. It is testable
+// in milliseconds with no infrastructure. The transaction that persists its
+// output lives one layer up, in services/ — never here.
 //
-// Scope of slice 03 (issue 03-pure-rating-engine-tests): the Simple-Result /
-// singles path with a constant K. A Side is modelled as an array of player ids
-// so doubles is the *same* engine with sides of one or two; the formula below
-// already generalises (mean Side rating, delta split equally). The Provisional
-// K=64 phase and the Americano K/2 round are documented in rating-engine.md but
-// are deliberately NOT modelled yet — see docs/open-questions/02. The extension
-// point is `kFactor()`.
+// A Side is modelled as an array of player ids, so doubles is the *same* engine
+// with sides of one or two; the formula below generalises (mean Side rating,
+// delta split equally). A Provisional high-K phase is on the spec's Later list;
+// the extension point is `kFactor()`.
 
 export type PlayerId = string;
 export type MatchSide = "A" | "B";
 
-/** The starting Rating of an unseen Player (rating-engine.md). */
+/** The starting Rating of an unseen Player. */
 export const STARTING_RATING = 1000;
-/** Normal K-factor. Provisional (K=64) and Americano (K/2) are deferred. */
+/** Normal K-factor. A Provisional high-K phase is deferred (Later list). */
 export const BASE_K = 32;
 /** The logistic divisor in the expected-score formula. */
 export const RATING_DIVISOR = 400;
-/** Competitive matches a Player needs to hold a Rank (CONTEXT, data-model.md). */
+/** Competitive matches a Player needs to hold a Rank. */
 export const DEFAULT_RANKED_THRESHOLD = 3;
 
 /**
  * One element of the replay stream. A minimal, pure view of a `match` row plus
  * its participants — enough for the engine, nothing more. Built in the domain
- * layer (id included, UUIDv7) without a DB round-trip, per ADR-0001.
+ * layer (id included, UUIDv7) without a DB round-trip.
+ *
+ * In Lite v1 the app only ever produces `classification: "competitive"` and
+ * `status: "confirmed"`; the other values are kept so the engine ports untouched
+ * and the casual-flag / confirmation Later items stay pure add-ons.
  */
 export interface EngineMatch {
   id: string;
@@ -43,10 +44,10 @@ export interface EngineMatch {
 }
 
 /**
- * The threaded state per Player within the group being replayed — rating-only
- * and minimal (rating-engine.md): nothing here that does not feed a future
- * Rating. `matchesSinceReset` mirrors `competitiveMatchesPlayed` until season
- * resets exist; both are carried now so the Provisional slice is a pure add-on.
+ * The threaded state per Player in the replayed log — rating-only and minimal:
+ * nothing here that does not feed a future Rating. `matchesSinceReset` mirrors
+ * `competitiveMatchesPlayed` (no resets in Lite); both are carried so a future
+ * Provisional phase is a pure add-on.
  */
 export interface PlayerState {
   rating: number;
@@ -95,10 +96,9 @@ export function expectedScore(ratingFor: number, ratingAgainst: number): number 
 }
 
 /**
- * The K-factor for a Rating update. Constant in this slice. The Provisional
- * phase (K=64 for a Player's first 10 competitive matches, or first 5 after a
- * season reset) plugs in here using the counts on `PlayerState` — that slice
- * re-adds the `state` parameter; see docs/open-questions/02-provisional-and-americano-k.
+ * The K-factor for a Rating update. Constant in Lite v1. A Provisional phase
+ * (higher K for a Player's first matches) would plug in here using the counts
+ * on `PlayerState` — that change re-adds the `state` parameter (Later list).
  */
 export function kFactor(): number {
   return BASE_K;
@@ -148,7 +148,7 @@ export function replayMatch(
   for (const side of ["A", "B"] as const) {
     const players = match.sides[side];
     const actual = match.winnerSide === side ? 1 : 0;
-    // Side delta, then split equally across the Side's players (rating-engine.md).
+    // Side delta, then split equally across the Side's players.
     const players0 = players.map((id) => stateOf(prior, id));
     const k = kFactor();
     const sideDelta = k * (actual - expected[side]);
@@ -180,8 +180,8 @@ export function replayMatch(
   return { next, outputs };
 }
 
-/** Total order on the replay stream: (played-at, logged-at, id) (ADR-0001). */
-function compareMatches(a: EngineMatch, b: EngineMatch): number {
+/** Total order on the replay stream: (played-at, logged-at, id). */
+export function compareMatches(a: EngineMatch, b: EngineMatch): number {
   return (
     a.playedAt.getTime() - b.playedAt.getTime() ||
     a.loggedAt.getTime() - b.loggedAt.getTime() ||
@@ -232,4 +232,21 @@ export function projectGroup(
   }
 
   return { currentRating, ratingHistory };
+}
+
+/**
+ * Rank each ranked Player in a projection (1-based, highest rating first) — the
+ * Leaderboard's ordering, expressed once. Unranked Players are absent from the map.
+ * Shared by the leaderboard read, the log payoff, and the match-detail rank deltas
+ * so "rank" means exactly one thing everywhere.
+ */
+export function rankMap(
+  current: ReadonlyMap<PlayerId, CurrentRating>,
+): Map<PlayerId, number> {
+  const ranked = [...current.values()]
+    .filter((c) => c.isRanked)
+    .sort((a, b) => b.rating - a.rating);
+  const ranks = new Map<PlayerId, number>();
+  ranked.forEach((c, i) => ranks.set(c.playerId, i + 1));
+  return ranks;
 }

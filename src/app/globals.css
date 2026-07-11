@@ -1,153 +1,98 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* ============================================================================
-   PadelClash design tokens — the single source of truth (ADR-0009).
-   Every color, type, edge, elevation, spacing and tilt value extracted from the
-   frozen visual spec in docs/ui/ds/ lives here, once. Components reference these
-   tokens only; a raw hex / px anywhere in src/ui or src/app fails lint.
-   Extraction map: docs/architecture/design-system-binding.md §1.
-   ========================================================================== */
-@theme {
-  /* --- Color: one paper, one ink, one signature orange ------------------- */
-  --color-paper: #f7efe6; /* warm page surface, never pure white */
-  --color-surface: #ffffff; /* card / control surface that sits on paper */
-  --color-ink: #17120d; /* every border, every shadow, all structure */
-  --color-primary: #f6601a; /* Hermès orange — the one action / live state */
-  --color-primary-soft: #fce0ce; /* soft orange fill for tiles & reaction pills */
+@custom-variant dark (&:is(.dark *));
 
-  /* Accents — player & data identity, used sparingly */
-  --color-teal: #1fb9a6;
-  --color-violet: #7b6cf6;
-  --color-butter: #f5c518;
-
-  /* Semantic — rating deltas ONLY, never decorative */
-  --color-win: #0e7a43;
-  --color-win-fill: #d5f0df;
-  --color-loss: #d42a1e;
-  --color-loss-fill: #fbdad6;
-
-  /* Text — see binding §9 for the a11y contrast rules. Body text uses ink;
-     these are the meta tints (utilities: text-secondary / text-muted). */
-  --color-secondary: #5a5043; /* binding "text-secondary" — all small meta (~6.7:1) */
-  --color-muted: #8a7f70; /* binding "text-muted" — large / display sizes ONLY */
-
-  /* Inert / disabled + hairline dividers (drawn from the spec cards) */
-  --color-divider: #e0d4c3; /* 2px inner card dividers */
-  --color-disabled: #c9bdad; /* disabled control border */
-  --color-disabled-ink: #9a8d7d; /* disabled control text */
-
-  /* --- Type: a shout, a speaker, a scoreboard --------------------------- */
-  --font-display: var(--font-archivo), sans-serif; /* Archivo Black */
-  --font-body: var(--font-grotesk), sans-serif; /* Space Grotesk 400–700 */
-  --font-mono: var(--font-space-mono), monospace; /* Space Mono 400/700 */
-
-  /* Scale (binding §1): display 42–60 / heading 24–26 / title 17–20 /
-     body 15–17 / meta 10–13 caps. Representative size per step + line-height. */
-  --text-display: 3.25rem; /* 52px */
-  --text-display--line-height: 0.95;
-  --text-heading: 1.5625rem; /* 25px */
-  --text-heading--line-height: 1;
-  --text-title: 1.125rem; /* 18px */
-  --text-title--line-height: 1.1;
-  --text-body: 1rem; /* 16px */
-  --text-body--line-height: 1.45;
-  --text-meta: 0.75rem; /* 12px — uppercase mono meta */
-  --text-meta--line-height: 1;
-
-  /* --- Edges: hard borders, hard shadows, zero blur --------------------- */
-  /* Border weights 2 / 2.5 / 3 / 4 are custom @utility classes below
-     (Tailwind has no border-width theme namespace). Radii are tokens: */
-  --radius-tag: 0.4375rem; /* 7px — status tags & delta pills */
-  --radius-chip: 0.5rem; /* 8px — score chips */
-  --radius-button: 0.8125rem; /* 13px — buttons */
-  --radius-card: 1.125rem; /* 18px — cards (16–20 range) */
-  --radius-pill: 1.875rem; /* 30px — pills */
-  --radius-frame: 2.5rem; /* 40px — device frame */
-
-  /* --- Elevation: solid ink, 0 blur, offset ---------------------------- */
-  --shadow-resting: 3px 3px 0 var(--color-ink);
-  --shadow-button: 4px 4px 0 var(--color-ink);
-  --shadow-raised: 5px 5px 0 var(--color-ink);
-  --shadow-hero: 8px 8px 0 var(--color-ink);
-  /* Colored shadows flag special cards — upsets, rivalries, confirm, my-row */
-  --shadow-primary: 5px 5px 0 var(--color-primary);
-  --shadow-violet: 5px 5px 0 var(--color-violet);
-  --shadow-teal: 5px 5px 0 var(--color-teal);
-
-  /* --- Spacing: 4px base grid (steps 8 · 12 · 18 · 24 · 30) ------------- */
-  --spacing: 0.25rem; /* the grid; p-2=8 p-3=12 p-6=24 etc. */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
 }
 
-/* ----------------------------------------------------------------------------
-   Custom border-width utilities. The spec's four ink weights (2 / 2.5 / 3 / 4)
-   have no Tailwind theme namespace, so they are named utilities. v4 preflight
-   sets `border: 0 solid` on everything, so pairing e.g. `border-bold border-ink`
-   yields a solid 3px ink border.
-   -------------------------------------------------------------------------- */
-@utility border-thin {
-  border-width: 2px;
-}
-@utility border-mid {
-  border-width: 2.5px;
-}
-@utility border-bold {
-  border-width: 3px;
-}
-@utility border-heavy {
-  border-width: 4px;
-}
-
-/* ----------------------------------------------------------------------------
-   Tilt — accent-only seasoning (binding §1, §8): stickers, badges, count pills,
-   avatars on hero moments. Range −5°…+2°. NEVER on cards, inputs, buttons,
-   tables, rows. Disabled under prefers-reduced-motion below.
-   -------------------------------------------------------------------------- */
-@utility tilt-sticker {
-  transform: rotate(-3deg);
-}
-@utility tilt-badge {
-  transform: rotate(-4deg);
-}
-@utility tilt-tag {
-  transform: rotate(-2deg);
-}
-@utility tilt-new {
-  transform: rotate(2deg);
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
 }
 
-/* Logo / sticker wobble — hero moments only (Brand.dc.html). */
-@keyframes pc-wobble {
-  0%,
-  100% {
-    transform: rotate(-5deg);
-  }
-  50% {
-    transform: rotate(5deg);
-  }
-}
-@utility wobble {
-  animation: pc-wobble 3.6s ease-in-out infinite;
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 }
 
 @layer base {
-  body {
-    background-color: var(--color-paper);
-    color: var(--color-text);
-    font-family: var(--font-body);
-    -webkit-font-smoothing: antialiased;
+  * {
+    @apply border-border outline-ring/50;
   }
-
-  /* Motion is never load-bearing for meaning (binding §9). Reduced-motion
-     stills the wobble AND the static tilt accents. */
-  @media (prefers-reduced-motion: reduce) {
-    .wobble {
-      animation: none;
-    }
-    .tilt-sticker,
-    .tilt-badge,
-    .tilt-tag,
-    .tilt-new {
-      transform: none;
-    }
+  body {
+    @apply bg-background text-foreground;
   }
 }

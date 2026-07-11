@@ -1,6 +1,6 @@
-// Tier 2 — property tests (ADR-0008, rating-engine.md). Hold over any random
-// valid log. A seeded generator keeps failures reproducible without pulling in a
-// property-testing dependency. Several seeds stand in for "any log".
+// Property tests: hold over any random valid log. A seeded generator keeps
+// failures reproducible without pulling in a property-testing dependency.
+// Several seeds stand in for "any log".
 
 import { describe, expect, it } from "vitest";
 import { projectGroup } from "./engine";
@@ -46,7 +46,7 @@ describe("idempotent rebuild — replaying twice yields identical rows", () => {
   it.each(SEEDS)("seed %i", (seed) => {
     const log = randomSinglesLog(seed);
     // A fresh from-scratch projection of an already-projected log must match:
-    // there is no snapshot that could drift (rating-engine.md rebuild contract).
+    // there is no snapshot that could drift.
     const once = serializeProjection(projectGroup(log));
     const twice = serializeProjection(projectGroup(log.slice()));
     expect(twice).toBe(once);

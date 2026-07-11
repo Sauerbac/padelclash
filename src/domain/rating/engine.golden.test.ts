@@ -1,4 +1,4 @@
-// Tier 1 — golden-master fixtures (ADR-0008, rating-engine.md). Hand-verified
+// Golden-master fixtures: hand-verified
 // scenario logs with exact expected `current_rating` + `rating_history`. These
 // double as the human-readable spec of the formula: a deliberate formula change
 // regenerates the expected numbers, and the diff is the reviewed blast radius.
@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { projectGroup } from "./engine";
 import { goldenSinglesSingleMatch, goldenSinglesUpset } from "./fixtures";
 
-describe("golden master — one singles match (issue 03)", () => {
+describe("golden master — one singles match", () => {
   const { currentRating, ratingHistory } = projectGroup(
     goldenSinglesSingleMatch.log,
   );
