@@ -2,13 +2,18 @@ import path from "node:path";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { getDb } from "./index";
 
-// Boot-time migration runner (called from src/instrumentation.ts). The
-// `drizzle/` folder sits next to the server: the repo root in dev, copied into
-// the image next to server.js in the standalone Docker build.
+// The `drizzle/` folder sits next to the server: the repo root in dev, copied
+// into the image next to server.js in the standalone Docker build. Also used
+// by the integration-test database (test-db.ts).
+export function migrationsFolder(): string {
+  return path.join(process.cwd(), "drizzle");
+}
+
+// Boot-time migration runner (called from src/instrumentation.ts).
 export async function runMigrations(): Promise<void> {
   try {
     await migrate(getDb(), {
-      migrationsFolder: path.join(process.cwd(), "drizzle"),
+      migrationsFolder: migrationsFolder(),
     });
     console.log("Database migrations applied");
   } catch (err) {
