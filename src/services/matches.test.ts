@@ -8,6 +8,7 @@ import {
 import type { Db } from "./db";
 import type { Player } from "./db/schema";
 import { uuidv7 } from "../lib/uuidv7";
+import { STARTING_RATING } from "../domain/rating/engine";
 import { createPlayer, retirePlayer } from "./players";
 import {
   deleteMatch,
@@ -15,6 +16,7 @@ import {
   getFeed,
   getLeaderboard,
   getMatch,
+  getPlayerDetail,
   logMatch,
 } from "./matches";
 
@@ -491,6 +493,163 @@ describe.skipIf(!hasDatabase)("matches service", () => {
 
     const feed = await getFeed(db);
     expect(feed[0].participants.map((p) => p.name)).toEqual(["Simon", "Alex"]);
+  });
+
+  it("player detail carries the headline stats: rating, rank, W–L", async () => {
+    for (let i = 0; i < 3; i++) await logMatch(db, singles(simon, alex));
+
+    const detail = await getPlayerDetail(db, simon.id);
+
+    expect(detail?.name).toBe("Simon");
+    expect(detail?.rank).toBe(1);
+    expect(detail?.wins).toBe(3);
+    expect(detail?.losses).toBe(0);
+    // Worked K=32 fold: 1000 → 1016 → 1030.53 → 1043.75.
+    expect(detail?.rating).toBeCloseTo(1043.75, 1);
+
+    const alexDetail = await getPlayerDetail(db, alex.id);
+    expect(alexDetail?.rank).toBe(2);
+    expect(alexDetail?.losses).toBe(3);
+    expect(alexDetail?.rating).toBeCloseTo(956.25, 1);
+  });
+
+  it("player detail's rating series is chronological even when logged out of order", async () => {
+    const casey = await createPlayer(db, "Casey");
+    const day1 = new Date("2026-07-09T18:00:00Z");
+    const day2 = new Date("2026-07-10T18:00:00Z");
+
+    // Day 2's match syncs first; day 1's arrives late (offline queue).
+    await logMatch(db, singles(simon, alex, { playedAt: day2 }));
+    await logMatch(db, singles(casey, simon, { playedAt: day1 }));
+
+    const detail = await getPlayerDetail(db, simon.id);
+
+    // Same worked example as the late-sync test: Simon loses to Casey on
+    // day 1 (1000 → 984), then beats Alex from 984 (E ≈ 0.477 → ≈ 1000.74).
+    expect(detail?.ratingSeries.map((p) => p.playedAt)).toEqual([day1, day2]);
+    expect(detail?.ratingSeries[0].ratingAfter).toBeCloseTo(984, 5);
+    expect(detail?.ratingSeries[1].ratingAfter).toBeCloseTo(1000.74, 1);
+    // Each point carries its match's projection delta for the chart tooltip.
+    expect(detail?.ratingSeries[0].delta).toBeCloseTo(-16, 5);
+    expect(detail?.ratingSeries[1].delta).toBeCloseTo(16.74, 1);
+  });
+
+  it("player detail lists only that player's matches, newest first", async () => {
+    const casey = await createPlayer(db, "Casey");
+    const day1 = new Date("2026-07-09T18:00:00Z");
+    const day2 = new Date("2026-07-10T18:00:00Z");
+    const day3 = new Date("2026-07-11T18:00:00Z");
+
+    await logMatch(db, singles(simon, alex, { playedAt: day1 }));
+    await logMatch(db, singles(casey, alex, { playedAt: day2 })); // not Simon's
+    await logMatch(db, singles(casey, simon, { playedAt: day3 }));
+
+    const detail = await getPlayerDetail(db, simon.id);
+
+    expect(detail?.matches.map((m) => m.playedAt)).toEqual([day3, day1]);
+    // Feed-card shape: named, sided participants with their deltas.
+    expect(
+      detail?.matches[1].participants.map((p) => [p.name, p.side]),
+    ).toEqual([
+      ["Simon", "A"],
+      ["Alex", "B"],
+    ]);
+    expect(detail?.matches[1].participants[0].delta).toBeCloseTo(16);
+  });
+
+  it("player detail tallies head-to-head records vs each opponent", async () => {
+    const casey = await createPlayer(db, "Casey");
+    const dana = await createPlayer(db, "Dana");
+
+    await logMatch(db, singles(simon, alex));
+    await logMatch(db, singles(simon, alex));
+    // Doubles: everyone on the other side is an opponent.
+    await logMatch(db, {
+      id: uuidv7(),
+      playedAt: new Date(),
+      loggedBy: simon.id,
+      sides: { A: [simon.id, casey.id], B: [alex.id, dana.id] },
+      winnerSide: "A",
+    });
+    await logMatch(db, singles(casey, simon));
+
+    const detail = await getPlayerDetail(db, simon.id);
+
+    // Most-faced first, ties by name: Alex ×3, then Casey/Dana ×1 each.
+    expect(
+      detail?.headToHead.map((o) => [o.name, o.wins, o.losses]),
+    ).toEqual([
+      ["Alex", 3, 0],
+      ["Casey", 0, 1],
+      ["Dana", 1, 0],
+    ]);
+  });
+
+  it("player detail tallies partner records from doubles only", async () => {
+    const casey = await createPlayer(db, "Casey");
+    const dana = await createPlayer(db, "Dana");
+    const doubles = (a: [Player, Player], b: [Player, Player]) => ({
+      id: uuidv7(),
+      playedAt: new Date(),
+      loggedBy: simon.id,
+      sides: { A: a.map((p) => p.id), B: b.map((p) => p.id) },
+      winnerSide: "A" as const,
+    });
+
+    await logMatch(db, doubles([simon, casey], [alex, dana])); // won with Casey
+    await logMatch(db, doubles([alex, casey], [simon, dana])); // lost with Dana
+    await logMatch(db, singles(simon, alex)); // singles: no partner
+
+    const detail = await getPlayerDetail(db, simon.id);
+
+    expect(
+      detail?.partners.map((p) => [p.name, p.wins, p.losses]),
+    ).toEqual([
+      ["Casey", 1, 0],
+      ["Dana", 0, 1],
+    ]);
+  });
+
+  it("retired players hold no rank and free their number", async () => {
+    // Both reach the ranked threshold; Simon sits #1, Alex #2.
+    for (let i = 0; i < 3; i++) await logMatch(db, singles(simon, alex));
+    await retirePlayer(db, simon.id);
+
+    // Rank belongs to the active leaderboard: the retiree shows unranked on
+    // their page, and the remaining ranks close up (no gap at #1).
+    expect((await getPlayerDetail(db, simon.id))?.rank).toBeNull();
+    expect((await getPlayerDetail(db, alex.id))?.rank).toBe(1);
+    const leaderboard = await getLeaderboard(db);
+    expect(leaderboard.map((e) => [e.name, e.rank])).toEqual([["Alex", 1]]);
+  });
+
+  it("player detail covers retirees, matchless players and junk ids", async () => {
+    await logMatch(db, singles(simon, alex));
+    await retirePlayer(db, alex.id);
+
+    // Retired players keep their page — history links to them.
+    const retiree = await getPlayerDetail(db, alex.id);
+    expect(retiree?.retired).toBe(true);
+    expect(retiree?.losses).toBe(1);
+    expect(retiree?.rating).toBeCloseTo(984);
+
+    // A player yet to play: starting rating, empty everything.
+    const casey = await createPlayer(db, "Casey");
+    const fresh = await getPlayerDetail(db, casey.id);
+    expect(fresh).toMatchObject({
+      rating: STARTING_RATING,
+      rank: null,
+      wins: 0,
+      losses: 0,
+      ratingSeries: [],
+      matches: [],
+      headToHead: [],
+      partners: [],
+    });
+
+    // Unknown ids — including non-uuid junk from the URL — are just null.
+    expect(await getPlayerDetail(db, uuidv7())).toBeNull();
+    expect(await getPlayerDetail(db, "not-a-uuid")).toBeNull();
   });
 
   it("keeps players unranked until the third match", async () => {

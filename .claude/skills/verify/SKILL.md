@@ -7,7 +7,8 @@ description: Build, launch, and drive PadelClash Lite locally to verify changes 
 
 ## Launch
 
-- DB: `docker compose up -d db` (Postgres on 5432; volume `db-data`).
+- DB: `docker compose up -d db` (host port from `POSTGRES_HOST_PORT` in
+  `.env` — 5433 locally, since another project holds 5432; volume `db-data`).
 - Port 3000 may be held by the compose app container from a previous
   image smoke test: `docker compose stop app` frees it.
 - App: `npm run dev` (background). Ready when

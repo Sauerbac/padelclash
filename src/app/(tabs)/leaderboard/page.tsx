@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { PlayerLink } from "@/components/player-link";
 import {
   Table,
   TableBody,
@@ -44,7 +45,7 @@ export default async function LeaderboardPage() {
                     {e.rank ?? "—"}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {e.name}
+                    <PlayerLink playerId={e.playerId}>{e.name}</PlayerLink>
                     {you?.id === e.playerId && (
                       <Badge variant="secondary" className="ml-2">
                         You

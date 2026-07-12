@@ -256,3 +256,11 @@ they earned interest during the grilling:
 | 17 | Scaffold | Fully fresh — deploy plumbing, CI and configs rebuilt, nothing config-level inherited |
 | 18 | UI system | shadcn/ui from the start; the old custom UI philosophy is dropped |
 | 19 | Old decisions | All pre-spec decisions (ADRs, CONTEXT.md, feature docs) are void unless restated in this document |
+
+## Decision log (2026-07-12, Player Detail slice)
+
+| # | Decision | Call |
+|---|---|---|
+| 20 | Rating chart | Hand-rolled inline SVG, no chart dependency — one line series doesn't earn recharts. Revisit only if a second chart form appears |
+| 21 | H2H/partner ordering | Most-played-together first, ties alphabetical |
+| 22 | Ranks & retirement | Rank is a property of the active leaderboard: retired players hold no rank and leave no numbering gap; their pages stay reachable and show unranked |

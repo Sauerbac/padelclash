@@ -303,7 +303,7 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardEntry[]> {
   const current = new Map<PlayerId, CurrentRating>(
     ratingRows.map((r) => [r.playerId, r]),
   );
-  const ranks = rankMap(current);
+  const ranks = activeRankMap(current, roster);
 
   const record = new Map<string, { wins: number; losses: number }>();
   for (const r of results) {
@@ -335,10 +335,32 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardEntry[]> {
   );
 }
 
+/**
+ * Rank is a property of the active leaderboard (decision log 2026-07-12):
+ * retired players hold no rank and leave no numbering gap, though their
+ * ratings stay in the projections and their pages stay reachable.
+ */
+function activeRankMap(
+  current: ReadonlyMap<PlayerId, CurrentRating>,
+  activePlayers: { id: string }[],
+): Map<PlayerId, number> {
+  const active = new Set(activePlayers.map((p) => p.id));
+  return rankMap(
+    new Map([...current].filter(([playerId]) => active.has(playerId))),
+  );
+}
+
 export interface MatchWithSides {
   match: Match;
   /** In side order (A first), with names so pickers can render retirees. */
   participants: { playerId: string; name: string; side: MatchSide }[];
+}
+
+// Ids arriving from URLs are junk until proven uuid — pg throws on the cast.
+function isUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    id,
+  );
 }
 
 /** A single match by id — the edit screen's read. Null when it doesn't exist. */
@@ -346,10 +368,7 @@ export async function getMatch(
   db: Db,
   matchId: string,
 ): Promise<MatchWithSides | null> {
-  // The id comes from the URL; junk would make pg throw on the uuid cast.
-  const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidPattern.test(matchId)) return null;
+  if (!isUuid(matchId)) return null;
 
   const [match] = await db
     .select()
@@ -437,6 +456,142 @@ export async function getFeed(db: Db): Promise<FeedMatch[]> {
         ratingAfter: row.ratingAfter,
       })),
   }));
+}
+
+export interface PlayerDetail {
+  playerId: string;
+  name: string;
+  retired: boolean;
+  rating: number;
+  /** 1-based leaderboard rank; null while below the ranked threshold. */
+  rank: number | null;
+  wins: number;
+  losses: number;
+  /** One point per match in replay (chronological) order — the chart's data. */
+  ratingSeries: RatingPoint[];
+  /** This player's match history, newest first — feed-card shape for reuse. */
+  matches: FeedMatch[];
+  /** Record vs each opponent faced, most-faced first (spec: head-to-head). */
+  headToHead: CompanionRecord[];
+  /** Record with each doubles partner, most-played-with first. */
+  partners: CompanionRecord[];
+}
+
+/** This player's record vs an opponent — or with a doubles partner. */
+export interface CompanionRecord {
+  playerId: string;
+  name: string;
+  wins: number;
+  losses: number;
+}
+
+export interface RatingPoint {
+  matchId: string;
+  playedAt: Date;
+  delta: number;
+  ratingAfter: number;
+}
+
+/**
+ * The Player Detail read (spec "Screens"): the full stats package for one
+ * player, all derived from the log and the projections. Retired players keep
+ * their page (history links to them). Null for unknown or non-uuid ids.
+ */
+export async function getPlayerDetail(
+  db: Db,
+  playerId: string,
+): Promise<PlayerDetail | null> {
+  if (!isUuid(playerId)) return null;
+
+  const [roster, ratingRows, feed] = await Promise.all([
+    db.select().from(players),
+    db.select().from(currentRating),
+    getFeed(db),
+  ]);
+  const player = roster.find((p) => p.id === playerId);
+  if (!player) return null;
+
+  const current = new Map<PlayerId, CurrentRating>(
+    ratingRows.map((r) => [r.playerId, r]),
+  );
+  const rating = current.get(playerId);
+
+  // The player's own matches, newest first (feed order).
+  const played = feed.filter((m) =>
+    m.participants.some((p) => p.playerId === playerId),
+  );
+  const wins = played.filter((m) =>
+    m.participants.some(
+      (p) => p.playerId === playerId && p.side === m.winnerSide,
+    ),
+  ).length;
+
+  return {
+    playerId,
+    name: player.name,
+    retired: player.retiredAt !== null,
+    rating: rating?.rating ?? STARTING_RATING,
+    rank:
+      activeRankMap(
+        current,
+        roster.filter((p) => p.retiredAt === null),
+      ).get(playerId) ?? null,
+    wins,
+    losses: played.length - wins,
+    // The feed is newest-first in the replay's total order, so reversing it
+    // is exactly chronological — late-synced matches sit where they belong.
+    ratingSeries: played
+      .map((m) => {
+        const me = m.participants.find((p) => p.playerId === playerId)!;
+        return {
+          matchId: m.id,
+          playedAt: m.playedAt,
+          delta: me.delta,
+          ratingAfter: me.ratingAfter,
+        };
+      })
+      .reverse(),
+    matches: played,
+    headToHead: companionRecords(played, playerId, "opposite"),
+    partners: companionRecords(played, playerId, "same"),
+  };
+}
+
+// Fold the player's matches into per-companion W–L tallies: "opposite" side
+// companions are opponents (head-to-head), "same" side are doubles partners.
+// Most-played-together first, ties by name.
+function companionRecords(
+  played: FeedMatch[],
+  playerId: string,
+  relation: "opposite" | "same",
+): CompanionRecord[] {
+  const records = new Map<string, CompanionRecord>();
+  for (const match of played) {
+    const mySide = match.participants.find(
+      (p) => p.playerId === playerId,
+    )!.side;
+    const won = mySide === match.winnerSide;
+    const companions = match.participants.filter((p) =>
+      relation === "opposite"
+        ? p.side !== mySide
+        : p.side === mySide && p.playerId !== playerId,
+    );
+    for (const c of companions) {
+      const record = records.get(c.playerId) ?? {
+        playerId: c.playerId,
+        name: c.name,
+        wins: 0,
+        losses: 0,
+      };
+      if (won) record.wins++;
+      else record.losses++;
+      records.set(c.playerId, record);
+    }
+  }
+  return [...records.values()].sort(
+    (a, b) =>
+      b.wins + b.losses - (a.wins + a.losses) || a.name.localeCompare(b.name),
+  );
 }
 
 /**

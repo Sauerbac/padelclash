@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { DeltaBadge } from "@/components/delta-badge";
 import { MatchCardActions } from "@/components/match-card-actions";
+import { PlayerLink } from "@/components/player-link";
 import type { FeedMatch } from "@/services/matches";
 
 // Server-rendered; formats in the server's timezone, which is fine for one
@@ -26,7 +27,13 @@ export function MatchCard({
   const losers = match.participants.filter(
     (p) => p.side !== match.winnerSide,
   );
-  const names = (side: typeof winners) => side.map((p) => p.name).join(" & ");
+  const names = (side: typeof winners) =>
+    side.map((p, i) => (
+      <span key={p.playerId}>
+        {i > 0 && <span className="text-muted-foreground"> & </span>}
+        <PlayerLink playerId={p.playerId}>{p.name}</PlayerLink>
+      </span>
+    ));
 
   // Set scores read winner-first, matching the names next to them.
   const setsText = match.sets
