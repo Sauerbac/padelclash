@@ -1,4 +1,4 @@
-import { LogMatchForm } from "@/components/log-match-form";
+import { MatchForm } from "@/components/match-form";
 import {
   Card,
   CardContent,
@@ -22,7 +22,7 @@ export default async function LogMatchPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Log Match</h1>
 
       {you ? (
-        <LogMatchForm
+        <MatchForm
           roster={roster.map(({ id, name }) => ({ id, name }))}
           loggerId={you.id}
         />

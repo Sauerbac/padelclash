@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
+  editMatchAction,
   logMatchAction,
   type PayoffDelta,
 } from "@/app/actions/matches";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DeltaBadge } from "@/components/delta-badge";
 import {
   Card,
   CardContent,
@@ -25,7 +27,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { uuidv7 } from "@/lib/uuidv7";
-import { cn } from "@/lib/utils";
 
 interface RosterEntry {
   id: string;
@@ -41,35 +42,69 @@ interface SetRow {
   b: string;
 }
 
-/** The current local time in datetime-local input format (YYYY-MM-DDTHH:mm). */
-function nowLocal(): string {
-  const d = new Date();
+/** A moment in datetime-local input format (YYYY-MM-DDTHH:mm), device-local. */
+function toLocalInput(date: Date): string {
+  const d = new Date(date);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 16);
 }
 
-export function LogMatchForm({
+function nowLocal(): string {
+  return toLocalInput(new Date());
+}
+
+/** An existing match being corrected — switches the form into edit mode. */
+export interface EditableMatch {
+  id: string;
+  /** ISO string; converted to the device's local time on the client. */
+  playedAtIso: string;
+  sides: Record<Side, string[]>;
+  winnerSide: Side;
+  sets: { a: number; b: number }[] | null;
+}
+
+export function MatchForm({
   roster,
   loggerId,
+  editing,
 }: {
   roster: RosterEntry[];
-  loggerId: string;
+  /** The bound player, pre-filled as side A's first slot when logging. */
+  loggerId?: string;
+  /** When set: pre-fill from this match and save corrections to it. */
+  editing?: EditableMatch;
 }) {
-  const [doubles, setDoubles] = useState(false);
+  const [doubles, setDoubles] = useState(
+    editing ? editing.sides.A.length === 2 : false,
+  );
   // The Logger pre-fills the first slot of side A (spec "Screens").
-  const [slots, setSlots] = useState<Slots>({
-    a1: loggerId,
-    a2: "",
-    b1: "",
-    b2: "",
-  });
-  const [winner, setWinner] = useState<Side | null>(null);
-  const [recordSets, setRecordSets] = useState(false);
-  const [sets, setSets] = useState<SetRow[]>([{ a: "", b: "" }]);
+  const [slots, setSlots] = useState<Slots>(() =>
+    editing
+      ? {
+          a1: editing.sides.A[0] ?? "",
+          a2: editing.sides.A[1] ?? "",
+          b1: editing.sides.B[0] ?? "",
+          b2: editing.sides.B[1] ?? "",
+        }
+      : { a1: loggerId ?? "", a2: "", b1: "", b2: "" },
+  );
+  const [winner, setWinner] = useState<Side | null>(
+    editing ? editing.winnerSide : null,
+  );
+  const [recordSets, setRecordSets] = useState(
+    Boolean(editing?.sets?.length),
+  );
+  const [sets, setSets] = useState<SetRow[]>(() =>
+    editing?.sets?.length
+      ? editing.sets.map((s) => ({ a: String(s.a), b: String(s.b) }))
+      : [{ a: "", b: "" }],
+  );
   // Defaults to "now" (spec "Match"). The server render can't know the
   // device's local time; hydration replaces it with the client's value and
   // the input carries suppressHydrationWarning for the transient mismatch.
-  const [playedAt, setPlayedAt] = useState(nowLocal);
+  const [playedAt, setPlayedAt] = useState(() =>
+    editing ? toLocalInput(new Date(editing.playedAtIso)) : nowLocal(),
+  );
 
   const [error, setError] = useState<string | null>(null);
   const [payoff, setPayoff] = useState<PayoffDelta[] | null>(null);
@@ -109,13 +144,16 @@ export function LogMatchForm({
     setError(null);
 
     startTransition(async () => {
-      const result = await logMatchAction({
-        id: uuidv7(),
+      const payload = {
+        id: editing ? editing.id : uuidv7(),
         playedAt: new Date(playedAt).toISOString(),
         sides: { A: sideIds("A"), B: sideIds("B") },
         winnerSide: winner,
         sets: parsedSets,
-      });
+      };
+      const result = editing
+        ? await editMatchAction(payload)
+        : await logMatchAction(payload);
       if (result.ok) setPayoff(result.deltas);
       else setError(result.error);
     });
@@ -123,7 +161,7 @@ export function LogMatchForm({
 
   function reset() {
     setPayoff(null);
-    setSlots({ a1: loggerId, a2: "", b1: "", b2: "" });
+    setSlots({ a1: loggerId ?? "", a2: "", b1: "", b2: "" });
     setWinner(null);
     setRecordSets(false);
     setSets([{ a: "", b: "" }]);
@@ -135,7 +173,7 @@ export function LogMatchForm({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Match logged</CardTitle>
+          <CardTitle>{editing ? "Match updated" : "Match logged"}</CardTitle>
           <CardDescription>Ratings have been updated.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -146,23 +184,19 @@ export function LogMatchForm({
                 <span className="text-muted-foreground">
                   {Math.round(d.ratingBefore)} → {Math.round(d.ratingAfter)}
                 </span>
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    d.delta >= 0
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-red-100 text-red-800",
-                  )}
-                >
-                  {d.delta >= 0 ? "+" : "−"}
-                  {Math.abs(Math.round(d.delta))}
-                </Badge>
+                <DeltaBadge delta={d.delta} />
               </li>
             ))}
           </ul>
-          <Button onClick={reset} className="w-full">
-            Log another match
-          </Button>
+          {editing ? (
+            <Button asChild className="w-full">
+              <Link href="/">Back to feed</Link>
+            </Button>
+          ) : (
+            <Button onClick={reset} className="w-full">
+              Log another match
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
@@ -311,7 +345,13 @@ export function LogMatchForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button onClick={submit} disabled={pending} className="w-full">
-        {pending ? "Logging…" : "Log match"}
+        {editing
+          ? pending
+            ? "Saving…"
+            : "Save changes"
+          : pending
+            ? "Logging…"
+            : "Log match"}
       </Button>
     </div>
   );

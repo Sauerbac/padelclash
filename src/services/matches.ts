@@ -1,4 +1,4 @@
-import { asc, eq, isNull, sql } from "drizzle-orm";
+import { asc, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "./db";
 import {
   currentRating,
@@ -19,6 +19,7 @@ import {
   type MatchSide,
   type PlayerId,
 } from "../domain/rating/engine";
+import { canModifyMatch, type MatchActor } from "../domain/edit-rights";
 
 export interface LogMatchInput {
   /** Client-generated UUIDv7 — the offline-sync idempotency key. */
@@ -108,6 +109,116 @@ export async function logMatch(
       alreadyLogged: false,
     };
   });
+}
+
+export interface EditMatchInput {
+  /** Id of the match being corrected. */
+  id: string;
+  playedAt: Date;
+  sides: Record<MatchSide, string[]>;
+  winnerSide: MatchSide;
+  sets?: SetScore[] | null;
+}
+
+export interface EditedMatch {
+  match: Match;
+  /** The corrected match's rating_history rows, post-replay. */
+  deltas: RatingHistoryRow[];
+}
+
+/**
+ * Correct a logged match: every played-fact is replaceable (playedAt, sides,
+ * winner, sets); id, loggedBy and loggedAt are history and never change.
+ * Edit rights are enforced here, inside the transaction, and projections are
+ * replayed in the same transaction, exactly like logMatch.
+ */
+export async function editMatch(
+  db: Db,
+  input: EditMatchInput,
+  actor: MatchActor,
+  now: Date = new Date(),
+): Promise<EditedMatch> {
+  validateSides(input.sides);
+  validateSets(input.sets ?? null);
+  return db.transaction(async (tx) => {
+    // Same writer serialization as logMatch (see there).
+    await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
+
+    await requireModifiableMatch(tx, input.id, actor, now, "edit");
+
+    const [match] = await tx
+      .update(matches)
+      .set({
+        playedAt: input.playedAt,
+        winnerSide: input.winnerSide,
+        sets: input.sets ?? null,
+      })
+      .where(eq(matches.id, input.id))
+      .returning();
+
+    // Participants are replaced wholesale — simpler than diffing sides.
+    await tx
+      .delete(matchParticipants)
+      .where(eq(matchParticipants.matchId, input.id));
+    await tx.insert(matchParticipants).values(
+      (["A", "B"] as const).flatMap((side) =>
+        input.sides[side].map((playerId) => ({
+          matchId: input.id,
+          playerId,
+          side,
+        })),
+      ),
+    );
+
+    await replayProjections(tx);
+
+    return { match, deltas: await deltasOf(tx, input.id) };
+  });
+}
+
+/**
+ * Delete a match from the log (spec "Match": a deleted match is a deleted
+ * row — FK cascade removes participants and history) and replay projections
+ * in the same transaction, exactly like logMatch. Edit rights are enforced
+ * here, inside the transaction, not just in the UI.
+ */
+export async function deleteMatch(
+  db: Db,
+  matchId: string,
+  actor: MatchActor,
+  now: Date = new Date(),
+): Promise<void> {
+  return db.transaction(async (tx) => {
+    // Same writer serialization as logMatch: a writer that skips the lock
+    // could commit a replay that misses a concurrent write.
+    await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
+
+    await requireModifiableMatch(tx, matchId, actor, now, "delete");
+
+    await tx.delete(matches).where(eq(matches.id, matchId));
+    await replayProjections(tx);
+  });
+}
+
+// The shared edit/delete preamble: the match must exist and the actor must
+// hold edit rights (spec "Edit rights"). Call after taking the write lock.
+async function requireModifiableMatch(
+  tx: Db,
+  matchId: string,
+  actor: MatchActor,
+  now: Date,
+  action: "edit" | "delete",
+): Promise<void> {
+  const [match] = await tx
+    .select()
+    .from(matches)
+    .where(eq(matches.id, matchId));
+  if (!match) throw new Error("Match not found");
+  if (!canModifyMatch(match, actor, now)) {
+    throw new Error(
+      `Only the Logger (within 24 h) or the admin can ${action} a match`,
+    );
+  }
 }
 
 function deltasOf(tx: Db, matchId: string): Promise<RatingHistoryRow[]> {
@@ -222,6 +333,110 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardEntry[]> {
       b.rating - a.rating ||
       a.name.localeCompare(b.name),
   );
+}
+
+export interface MatchWithSides {
+  match: Match;
+  /** In side order (A first), with names so pickers can render retirees. */
+  participants: { playerId: string; name: string; side: MatchSide }[];
+}
+
+/** A single match by id — the edit screen's read. Null when it doesn't exist. */
+export async function getMatch(
+  db: Db,
+  matchId: string,
+): Promise<MatchWithSides | null> {
+  // The id comes from the URL; junk would make pg throw on the uuid cast.
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(matchId)) return null;
+
+  const [match] = await db
+    .select()
+    .from(matches)
+    .where(eq(matches.id, matchId));
+  if (!match) return null;
+
+  const participants = await db
+    .select({
+      playerId: matchParticipants.playerId,
+      name: players.name,
+      side: matchParticipants.side,
+    })
+    .from(matchParticipants)
+    .innerJoin(players, eq(matchParticipants.playerId, players.id))
+    .where(eq(matchParticipants.matchId, matchId))
+    .orderBy(asc(matchParticipants.side));
+
+  return { match, participants };
+}
+
+export interface FeedParticipant {
+  playerId: string;
+  name: string;
+  side: MatchSide;
+  ratingBefore: number;
+  delta: number;
+  ratingAfter: number;
+}
+
+export interface FeedMatch {
+  id: string;
+  playedAt: Date;
+  loggedAt: Date;
+  loggedBy: string;
+  winnerSide: MatchSide;
+  sets: SetScore[] | null;
+  participants: FeedParticipant[];
+}
+
+/**
+ * The Feed read (spec "Screens"): every match, newest first by the replay's
+ * total order (playedAt, loggedAt, id). Participants and their deltas come
+ * straight from rating_history — the projection already holds one row per
+ * participant per match. Names join the full roster: retired players keep
+ * their name in old matches.
+ */
+export async function getFeed(db: Db): Promise<FeedMatch[]> {
+  const [matchRows, historyRows, roster] = await Promise.all([
+    db
+      .select()
+      .from(matches)
+      .orderBy(
+        desc(matches.playedAt),
+        desc(matches.loggedAt),
+        desc(matches.id),
+      ),
+    db.select().from(ratingHistory),
+    db.select().from(players),
+  ]);
+
+  const nameById = new Map(roster.map((p) => [p.id, p.name]));
+  const byMatch = new Map<string, RatingHistoryRow[]>();
+  for (const row of historyRows) {
+    const rows = byMatch.get(row.matchId) ?? [];
+    rows.push(row);
+    byMatch.set(row.matchId, rows);
+  }
+
+  return matchRows.map((m) => ({
+    id: m.id,
+    playedAt: m.playedAt,
+    loggedAt: m.loggedAt,
+    loggedBy: m.loggedBy,
+    winnerSide: m.winnerSide,
+    sets: m.sets,
+    participants: (byMatch.get(m.id) ?? [])
+      .sort((a, b) => a.side.localeCompare(b.side))
+      .map((row) => ({
+        playerId: row.playerId,
+        name: nameById.get(row.playerId) ?? "Unknown",
+        side: row.side,
+        ratingBefore: row.ratingBefore,
+        delta: row.delta,
+        ratingAfter: row.ratingAfter,
+      })),
+  }));
 }
 
 /**

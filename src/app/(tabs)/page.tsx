@@ -1,5 +1,6 @@
+import { canModifyMatch } from "@/domain/edit-rights";
+import { MatchCard } from "@/components/match-card";
 import { NamePicker } from "@/components/name-picker";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -7,18 +8,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { isAdmin } from "@/services/auth/admin";
 import { getBoundPlayer } from "@/services/auth/binding";
 import { getDb } from "@/services/db";
+import { getFeed } from "@/services/matches";
 import { listActivePlayers } from "@/services/players";
 import { getSettings } from "@/services/settings";
 
-export default async function Home() {
+export default async function FeedPage() {
   const db = getDb();
-  const [you, settings, roster] = await Promise.all([
+  const [you, admin, settings, roster, feed] = await Promise.all([
     getBoundPlayer(),
+    isAdmin(),
     getSettings(db),
     listActivePlayers(db),
+    getFeed(db),
   ]);
+  const viewer = { playerId: you?.id ?? null, isAdmin: admin };
+  const now = new Date();
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-6 p-6">
@@ -51,28 +58,21 @@ export default async function Home() {
         </p>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Roster</CardTitle>
-          <CardDescription>
-            The feed arrives with the next slice.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {roster.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No players yet.</p>
-          ) : (
-            <ul className="space-y-2">
-              {roster.map((player) => (
-                <li key={player.id} className="flex items-center gap-2 text-sm">
-                  {player.name}
-                  {you?.id === player.id && <Badge variant="secondary">You</Badge>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {feed.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No matches yet — log the first one.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {feed.map((match) => (
+            <MatchCard
+              key={match.id}
+              match={match}
+              canModify={canModifyMatch(match, viewer, now)}
+            />
+          ))}
+        </div>
+      )}
     </main>
   );
 }
