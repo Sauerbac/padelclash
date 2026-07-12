@@ -55,7 +55,7 @@ export default async function Home() {
         <CardHeader>
           <CardTitle>Roster</CardTitle>
           <CardDescription>
-            The feed and leaderboard arrive with the next slice.
+            The feed arrives with the next slice.
           </CardDescription>
         </CardHeader>
         <CardContent>

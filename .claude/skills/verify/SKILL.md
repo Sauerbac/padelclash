@@ -37,5 +37,6 @@ description: Build, launch, and drive PadelClash Lite locally to verify changes 
 - Reset dev data: `docker exec paddleclash-db-1 psql -U postgres -d
   padelclash -c "truncate players, settings"` (add tables as slices
   add them).
-- Integration tests use a separate `padelclash_test` database on the
-  same server — dev data and tests never collide.
+- Integration tests use separate `padelclash_test_N` databases (one
+  per vitest worker) on the same server — dev data and tests never
+  collide.

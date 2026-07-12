@@ -8,11 +8,14 @@ import * as schema from "./schema";
 import { migrationsFolder } from "./migrate";
 import type { Db } from "./index";
 
-// Integration-test database: a separate `padelclash_test` database on the same
+// Integration-test database: a separate `padelclash_test_N` database on the same
 // Postgres server as DATABASE_URL (the local compose db, or a CI service).
 // Created on demand, migrated with the real migrations, truncated per test.
 
-const TEST_DB_NAME = "padelclash_test";
+// One database per vitest worker: test files run in parallel workers, and a
+// shared database would let one file's truncateAll() wipe another's rows
+// mid-test. The pool id makes each worker's db its own.
+const TEST_DB_NAME = `padelclash_test_${process.env.VITEST_POOL_ID ?? "0"}`;
 
 export const hasDatabase = Boolean(process.env.DATABASE_URL);
 
