@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { bindDevice } from "@/app/actions/binding";
@@ -52,6 +53,15 @@ export function JoinLanding({
   return (
     <main className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-sm border px-5 py-6">
+        <Image
+          src="/logo.svg"
+          alt="PadelClash"
+          width={120}
+          height={120}
+          priority
+          unoptimized
+          className="mx-auto mb-4"
+        />
         <p className="kicker">Welcome to the club</p>
         <h1 className="mt-2.5 font-display text-4xl leading-[1.1] uppercase">
           {status === "failed" ? "Something went wrong" : `Hi ${playerName}! 👋`}

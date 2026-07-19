@@ -38,11 +38,14 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (NEVER_CACHE.some((pattern) => pattern.test(url.pathname))) return;
 
-  // Build-hashed chunks and generated icons are immutable per deploy.
+  // Build-hashed chunks, generated icons and the logo are effectively
+  // immutable per deploy (a changed logo warrants a VERSION bump anyway).
   if (
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icon/") ||
-    url.pathname === "/apple-icon"
+    url.pathname === "/apple-icon" ||
+    url.pathname === "/logo.svg" ||
+    url.pathname === "/logo-tile.svg"
   ) {
     event.respondWith(cacheFirst(request));
     return;

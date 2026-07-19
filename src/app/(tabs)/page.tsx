@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { canModifyMatch } from "@/domain/edit-rights";
 import { MatchCard } from "@/components/match-card";
 import { NamePicker } from "@/components/name-picker";
@@ -24,7 +25,21 @@ export default async function FeedPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
-      <PageHeader kicker="Your club. Your receipts." title="PadelClash" />
+      <PageHeader
+        kicker="Your club. Your receipts."
+        title="PadelClash"
+        actions={
+          <Image
+            src="/logo.svg"
+            alt=""
+            width={72}
+            height={72}
+            priority
+            unoptimized
+            className="shrink-0"
+          />
+        }
+      />
 
       {you ? (
         <p className="text-[15px] font-semibold text-muted-foreground">
