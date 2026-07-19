@@ -14,6 +14,11 @@ description: Build, launch, and drive PadelClash Lite locally to verify changes 
 - App: `npm run dev` (background). Ready when
   `curl http://localhost:3000/api/health` returns `{"status":"ok"}`.
   Boot-time migrations run automatically (instrumentation).
+- PWA/service-worker checks need production (dev unregisters the SW):
+  `npm run build`, copy `.next/static` → `.next/standalone/.next/static`
+  and `public` → `.next/standalone/public`, then run
+  `node .next/standalone/server.js` with `DATABASE_URL`/`ADMIN_PASSWORD`/
+  `PORT=3000` set.
 
 ## Drive
 

@@ -264,3 +264,11 @@ they earned interest during the grilling:
 | 20 | Rating chart | Hand-rolled inline SVG, no chart dependency — one line series doesn't earn recharts. Revisit only if a second chart form appears |
 | 21 | H2H/partner ordering | Most-played-together first, ties alphabetical |
 | 22 | Ranks & retirement | Rank is a property of the active leaderboard: retired players hold no rank and leave no numbering gap; their pages stay reachable and show unranked |
+
+## Decision log (2026-07-19, PWA slice)
+
+| # | Decision | Call |
+|---|---|---|
+| 23 | App icons | Generated at build time from one JSX mark via next/og ImageResponse — no binary icon assets in the repo |
+| 24 | Service worker | Hand-rolled app-shell worker, no Serwist/Workbox dependency: network-first navigations with cache fallback, cache-first for build-hashed assets; `/api`, `/admin`, `/join` are never cached (tokens/admin state don't belong in Cache Storage) |
+| 25 | SW in dev | `next dev` actively unregisters any service worker — a compose image smoke test on port 3000 would otherwise leave a prod worker serving stale chunks into dev |
