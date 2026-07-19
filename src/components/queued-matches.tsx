@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   QUEUE_CHANGED_EVENT,
   listQueuedMatches,
@@ -23,6 +24,7 @@ const playedAtFormat = new Intl.DateTimeFormat("en-GB", {
 /**
  * "Pending sync" markers in the logger's local feed (spec "PWA & offline"):
  * matches waiting in the offline queue, rendered above the synced feed.
+ * Queued variant of MatchCard: dashed gold border, no deltas yet.
  */
 export function QueuedMatches() {
   const [queued, setQueued] = useState<QueuedMatch[]>([]);
@@ -60,41 +62,40 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
     .join(", ");
 
   return (
-    <Card className="border-dashed">
-      <CardContent className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1">
-            <p className="text-sm">
-              <span className="font-medium">{winners.join(" & ")}</span>
-              <span className="text-muted-foreground"> def. </span>
-              <span className="font-medium">{losers.join(" & ")}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {playedAtFormat.format(new Date(match.playedAt))}
-              {setsText && <> · {setsText}</>}
-            </p>
-          </div>
-          <Badge variant="outline">Pending sync</Badge>
+    <article className="border border-dashed border-accent px-3.5 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-lg font-semibold uppercase">
+          {winners.join(" & ")}
+          <span className="font-medium text-muted-foreground lowercase">
+            {" "}
+            def.{" "}
+          </span>
+          <span className="text-muted-foreground">{losers.join(" & ")}</span>
+        </p>
+        <Badge variant="pending">Pending sync</Badge>
+      </div>
+      <p className="mt-1 font-mono text-xs font-medium text-muted-foreground">
+        {playedAtFormat.format(new Date(match.playedAt))}
+        {setsText && <> · {setsText}</>}
+      </p>
+      {match.syncError && (
+        <div className="mt-2.5 space-y-2.5">
+          <Alert variant="destructive">
+            Couldn&apos;t sync: {match.syncError}
+          </Alert>
+          <ConfirmDialog
+            trigger={
+              <Button variant="destructive" size="xs">
+                Discard
+              </Button>
+            }
+            title="Discard this queued match?"
+            description="It never reached the server — discarding removes it from this device for good."
+            confirmLabel="Discard"
+            onConfirm={() => removeQueuedMatch(match.id)}
+          />
         </div>
-        {match.syncError && (
-          <div className="space-y-2">
-            <p className="text-xs text-destructive">
-              Couldn&apos;t sync: {match.syncError}
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (window.confirm("Discard this queued match for good?")) {
-                  removeQueuedMatch(match.id);
-                }
-              }}
-            >
-              Discard
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </article>
   );
 }

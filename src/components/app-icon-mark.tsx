@@ -13,14 +13,14 @@ export function AppIconMark({ size }: { size: number }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#171717",
+        background: "#16110d",
       }}
     >
       <div
         style={{
           display: "flex",
           alignItems: "flex-start",
-          color: "#fafafa",
+          color: "#f2e7d3",
           fontSize: size * 0.5,
           fontWeight: 700,
           lineHeight: 1,
@@ -34,7 +34,7 @@ export function AppIconMark({ size }: { size: number }) {
             marginTop: size * 0.03,
             marginLeft: size * 0.02,
             borderRadius: "50%",
-            background: "#ea580c",
+            background: "#e03616",
           }}
         />
       </div>

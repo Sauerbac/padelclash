@@ -9,8 +9,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Padel match tracker for the circle",
     start_url: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#ffffff",
+    background_color: "#16110d",
+    theme_color: "#16110d",
     icons: [
       { src: "/icon/192", sizes: "192x192", type: "image/png" },
       { src: "/icon/512", sizes: "512x512", type: "image/png" },

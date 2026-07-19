@@ -1,18 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Anton, Barlow_Condensed, IBM_Plex_Mono } from "next/font/google";
 import { BindingRecovery } from "@/components/binding-recovery";
 import { OfflineSync } from "@/components/offline-sync";
 import { SwRegister } from "@/components/sw-register";
 import { hasPlayerBinding } from "@/services/auth/binding";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const anton = Anton({
+  weight: "400",
+  variable: "--font-anton",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const barlow = Barlow_Condensed({
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-barlow",
+  subsets: ["latin"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex-mono",
   subsets: ["latin"],
 });
 
@@ -22,12 +30,12 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "PadelClash",
-    statusBarStyle: "default",
+    statusBarStyle: "black",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  themeColor: "#16110d",
 };
 
 export default async function RootLayout({
@@ -41,7 +49,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${anton.variable} ${barlow.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <SwRegister />

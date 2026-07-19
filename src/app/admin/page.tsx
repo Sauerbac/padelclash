@@ -2,15 +2,9 @@ import { logoutAction } from "@/app/actions/admin";
 import { AdminLogin } from "@/components/admin/admin-login";
 import { CreatePlayerForm } from "@/components/admin/create-player-form";
 import { NamePickerToggle } from "@/components/admin/name-picker-toggle";
+import { PageHeader } from "@/components/page-header";
 import { PlayerRow } from "@/components/admin/player-row";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { isAdmin } from "@/services/auth/admin";
 import { getDb } from "@/services/db";
 import { listPlayers } from "@/services/players";
@@ -34,52 +28,56 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <form action={logoutAction}>
-          <Button variant="ghost" size="sm" type="submit">
-            Log out
-          </Button>
-        </form>
-      </div>
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
+      <PageHeader
+        kicker="The commissioner"
+        title="Admin"
+        actions={
+          <form action={logoutAction}>
+            <Button
+              variant="outline"
+              size="xs"
+              type="submit"
+              className="text-muted-foreground"
+            >
+              Log out
+            </Button>
+          </form>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Players</CardTitle>
-          <CardDescription>
-            Share a player&apos;s join link to bind their device. Rotating a
-            link kills the old one.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <CreatePlayerForm />
-          {players.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No players yet.</p>
-          ) : (
-            <ul className="divide-y">
-              {players.map((player) => (
-                <PlayerRow
-                  key={player.id}
-                  playerId={player.id}
-                  name={player.name}
-                  personalToken={player.personalToken}
-                  retired={player.retiredAt !== null}
-                />
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <section>
+        <h2 className="section-label text-primary">Players</h2>
+        <p className="mt-1 mb-2.5 text-sm font-semibold text-muted-foreground">
+          A join link binds a player&apos;s device. Rotating a link kills the
+          old one.
+        </p>
+        <CreatePlayerForm />
+        {players.length === 0 ? (
+          <p className="mt-3 text-sm font-semibold text-muted-foreground">
+            No players yet.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {players.map((player) => (
+              <PlayerRow
+                key={player.id}
+                playerId={player.id}
+                name={player.name}
+                personalToken={player.personalToken}
+                retired={player.retiredAt !== null}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section>
+        <h2 className="section-label mb-2.5 text-primary">Settings</h2>
+        <div className="border p-3.5">
           <NamePickerToggle enabled={settings.namePickerEnabled} />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </main>
   );
 }

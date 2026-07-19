@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JoinLanding } from "@/components/join-landing";
 import { getDb } from "@/services/db";
 import { getPlayerByToken } from "@/services/players";
@@ -16,15 +15,15 @@ export default async function JoinPage({
   if (!player) {
     return (
       <main className="flex flex-1 items-center justify-center p-6">
-        <Card className="w-full max-w-sm">
-          <CardHeader>
-            <CardTitle>This link doesn&apos;t work</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+        <div className="w-full max-w-sm border px-5 py-6">
+          <h1 className="font-display text-3xl leading-[1.1] uppercase">
+            This link doesn&apos;t work
+          </h1>
+          <p className="mt-3 text-base leading-normal font-semibold text-muted-foreground">
             The invite link is invalid or has been replaced. Ask the group
             admin for a fresh one.
-          </CardContent>
-        </Card>
+          </p>
+        </div>
       </main>
     );
   }

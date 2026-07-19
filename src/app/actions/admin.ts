@@ -25,7 +25,7 @@ export async function loginAction(
     };
   }
   if (result === "wrong-password") {
-    return { error: "Wrong password" };
+    return { error: "Wrong password. Nice try." };
   }
   revalidatePath("/admin");
   return {};

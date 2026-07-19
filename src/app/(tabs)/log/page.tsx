@@ -1,11 +1,5 @@
 import { MatchForm } from "@/components/match-form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { getBoundPlayer } from "@/services/auth/binding";
 import { getDb } from "@/services/db";
 import { listActivePlayers } from "@/services/players";
@@ -18,8 +12,8 @@ export default async function LogMatchPage() {
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 space-y-6 p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Log Match</h1>
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
+      <PageHeader kicker="New match" title="Log Match" />
 
       {you ? (
         <MatchForm
@@ -27,17 +21,16 @@ export default async function LogMatchPage() {
           loggerId={you.id}
         />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Who&apos;s logging?</CardTitle>
-            <CardDescription>
-              This device isn&apos;t bound to a player yet, so matches can&apos;t
-              be credited. Open your personal join link first — or ask the
-              group admin for one.
-            </CardDescription>
-          </CardHeader>
-          <CardContent />
-        </Card>
+        <section className="border p-4">
+          <h2 className="font-display text-[26px] leading-[1.1] uppercase">
+            Who&apos;s logging?
+          </h2>
+          <p className="mt-2 text-[15px] leading-normal font-semibold text-muted-foreground">
+            This device isn&apos;t bound to a player yet, so matches can&apos;t
+            be credited. Open your personal join link first — or ask the group
+            admin for one.
+          </p>
+        </section>
       )}
     </main>
   );

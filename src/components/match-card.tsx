@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { DeltaBadge } from "@/components/delta-badge";
 import { MatchCardActions } from "@/components/match-card-actions";
 import { PlayerLink } from "@/components/player-link";
@@ -13,7 +12,10 @@ const playedAtFormat = new Intl.DateTimeFormat("en-GB", {
   minute: "2-digit",
 });
 
-/** A feed card (spec "Screens"): sides, result, per-player rating deltas. */
+/**
+ * A feed card (design "MatchCard"): winners bright, losers muted, mono meta
+ * line, rating-delta chips winners-first.
+ */
 export function MatchCard({
   match,
   canModify,
@@ -41,30 +43,29 @@ export function MatchCard({
     .join(", ");
 
   return (
-    <Card>
-      <CardContent className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1">
-            <p className="text-sm">
-              <span className="font-medium">{names(winners)}</span>
-              <span className="text-muted-foreground"> def. </span>
-              <span className="font-medium">{names(losers)}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {playedAtFormat.format(match.playedAt)}
-              {setsText && <> · {setsText}</>}
-            </p>
-          </div>
-          {canModify && <MatchCardActions matchId={match.id} />}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {[...winners, ...losers].map((p) => (
-            <DeltaBadge key={p.playerId} delta={p.delta}>
-              {p.name}{" "}
-            </DeltaBadge>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <article className="border px-3.5 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-lg font-semibold uppercase">
+          {names(winners)}
+          <span className="font-medium text-muted-foreground lowercase">
+            {" "}
+            def.{" "}
+          </span>
+          <span className="text-muted-foreground">{names(losers)}</span>
+        </p>
+        {canModify && <MatchCardActions matchId={match.id} />}
+      </div>
+      <p className="mt-1 font-mono text-xs font-medium text-muted-foreground">
+        {playedAtFormat.format(match.playedAt)}
+        {setsText && <> · {setsText}</>}
+      </p>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {[...winners, ...losers].map((p) => (
+          <DeltaBadge key={p.playerId} delta={p.delta}>
+            {p.name}{" "}
+          </DeltaBadge>
+        ))}
+      </div>
+    </article>
   );
 }

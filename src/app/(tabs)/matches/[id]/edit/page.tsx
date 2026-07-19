@@ -1,12 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canModifyMatch } from "@/domain/edit-rights";
 import { MatchForm } from "@/components/match-form";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { currentActor } from "@/services/auth/actor";
 import { getDb } from "@/services/db";
 import { getMatch } from "@/services/matches";
@@ -32,16 +29,23 @@ export default async function EditMatchPage({
 
   if (!canModifyMatch(match, viewer, new Date())) {
     return (
-      <main className="mx-auto w-full max-w-lg flex-1 space-y-6 p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>This match is locked</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+      <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
+        <PageHeader kicker="Corrections desk" title="Edit Match" />
+        <section className="border px-5 py-6 text-center">
+          <div aria-hidden className="text-3xl">
+            🔒
+          </div>
+          <h2 className="mt-2.5 font-display text-[26px] leading-[1.1] uppercase">
+            This match is locked
+          </h2>
+          <p className="mt-2.5 text-[15px] leading-relaxed font-semibold text-muted-foreground">
             Only the player who logged a match can edit it, and only within
-            24 hours. Ask the group admin to fix it.
-          </CardContent>
-        </Card>
+            24 hours. Ask the group admin to fix it — bribes optional.
+          </p>
+          <Button asChild variant="outline" className="mt-4 w-full">
+            <Link href="/">Back to feed</Link>
+          </Button>
+        </section>
       </main>
     );
   }
@@ -57,8 +61,8 @@ export default async function EditMatchPage({
   for (const p of participants) sides[p.side].push(p.playerId);
 
   return (
-    <main className="mx-auto w-full max-w-lg flex-1 space-y-6 p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Edit Match</h1>
+    <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
+      <PageHeader kicker="Corrections desk" title="Edit Match" />
 
       <MatchForm
         roster={[...options].map(([id, name]) => ({ id, name }))}

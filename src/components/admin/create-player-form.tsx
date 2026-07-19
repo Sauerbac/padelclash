@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { createPlayerAction, type FormState } from "@/app/actions/admin";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -18,14 +19,14 @@ export function CreatePlayerForm() {
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-1">
+    <form ref={formRef} action={formAction} className="space-y-2">
       <div className="flex gap-2">
         <Input name="name" placeholder="New player name" required />
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} className="px-5 text-base">
           Add
         </Button>
       </div>
-      {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+      {state.error && <Alert variant="destructive">{state.error}</Alert>}
     </form>
   );
 }

@@ -4,13 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { bindDevice } from "@/app/actions/binding";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { writeBindingToken } from "@/lib/binding-storage";
 
 type Status = "binding" | "bound" | "failed";
@@ -58,20 +51,19 @@ export function JoinLanding({
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>
-            {status === "failed"
-              ? "Something went wrong"
-              : `Hi ${playerName}! 👋`}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
+      <div className="w-full max-w-sm border px-5 py-6">
+        <p className="kicker">Welcome to the club</p>
+        <h1 className="mt-2.5 font-display text-4xl leading-[1.1] uppercase">
+          {status === "failed" ? "Something went wrong" : `Hi ${playerName}! 👋`}
+        </h1>
+        <div className="mt-3 text-base leading-normal font-semibold text-muted-foreground">
           {status === "binding" && <p>Linking this device to you…</p>}
           {status === "bound" && (
             <p>
-              This device is now yours: matches you log will be credited to{" "}
-              <span className="font-medium text-foreground">{playerName}</span>.
+              This device is now yours. Every match logged here gets credited
+              to{" "}
+              <span className="text-foreground uppercase">{playerName}</span>{" "}
+              — wins and losses alike. Choose wisely.
             </p>
           )}
           {status === "failed" && (
@@ -80,27 +72,25 @@ export function JoinLanding({
               group admin for a fresh link.
             </p>
           )}
-          {status === "bound" && showInstallHint && (
-            <p className="rounded-md bg-muted p-3">
-              <span className="font-medium text-foreground">
-                Add it to your home screen:
-              </span>{" "}
-              tap the share button in Safari, then{" "}
-              <span className="font-medium text-foreground">
-                Add to Home Screen
-              </span>
-              . The app opens full-screen and keeps you signed in.
+        </div>
+        {status === "bound" && showInstallHint && (
+          <div className="mt-4 border px-3.5 py-3">
+            <p className="text-xs font-bold tracking-[2px] text-accent uppercase">
+              On iPhone?
             </p>
-          )}
-        </CardContent>
-        {status === "bound" && (
-          <CardFooter>
-            <Button asChild className="w-full">
-              <Link href="/">Open PadelClash</Link>
-            </Button>
-          </CardFooter>
+            <p className="mt-1 text-sm leading-snug font-semibold text-muted-foreground">
+              Tap Share, then{" "}
+              <span className="text-foreground">Add to Home Screen</span> to
+              install the app. It opens full-screen and keeps you signed in.
+            </p>
+          </div>
         )}
-      </Card>
+        {status === "bound" && (
+          <Button asChild className="mt-4 w-full">
+            <Link href="/">Open PadelClash</Link>
+          </Button>
+        )}
+      </div>
     </main>
   );
 }

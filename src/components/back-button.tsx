@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -14,15 +13,17 @@ export function BackButton() {
   return (
     <Button
       variant="ghost"
-      size="sm"
+      size="xs"
       aria-label="Back"
-      className="-ml-2"
+      className="-ml-2 text-[13px]"
       onClick={() => {
         if (window.history.length > 1) router.back();
         else router.push("/");
       }}
     >
-      <ChevronLeft aria-hidden />
+      <span aria-hidden className="text-base leading-none">
+        ‹
+      </span>
       Back
     </Button>
   );

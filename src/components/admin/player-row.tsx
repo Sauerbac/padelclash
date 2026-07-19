@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   renamePlayerAction,
   retirePlayerAction,
@@ -8,36 +8,8 @@ import {
 } from "@/app/actions/admin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Input } from "@/components/ui/input";
-
-// Destructive per-player action as a confirm-guarded one-button form.
-function ConfirmActionForm({
-  action,
-  playerId,
-  confirmMessage,
-  variant,
-  children,
-}: {
-  action: (formData: FormData) => void;
-  playerId: string;
-  confirmMessage: string;
-  variant: "outline" | "ghost";
-  children: React.ReactNode;
-}) {
-  return (
-    <form
-      action={action}
-      onSubmit={(e) => {
-        if (!window.confirm(confirmMessage)) e.preventDefault();
-      }}
-    >
-      <input type="hidden" name="playerId" value={playerId} />
-      <Button type="submit" variant={variant} size="sm">
-        {children}
-      </Button>
-    </form>
-  );
-}
 
 export function PlayerRow({
   playerId,
@@ -51,6 +23,7 @@ export function PlayerRow({
   retired: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const [, startTransition] = useTransition();
 
   async function copyJoinLink() {
     const link = `${window.location.origin}/join/${personalToken}`;
@@ -64,48 +37,73 @@ export function PlayerRow({
     setTimeout(() => setCopied(false), 1500);
   }
 
+  function act(action: (formData: FormData) => Promise<void> | void) {
+    startTransition(() => {
+      const data = new FormData();
+      data.set("playerId", playerId);
+      action(data);
+    });
+  }
+
+  if (retired) {
+    return (
+      <li className="border border-hairline px-3.5 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-base font-semibold text-muted-foreground/70 uppercase">
+            {name}
+          </span>
+          <Badge variant="retired">Retired</Badge>
+        </div>
+      </li>
+    );
+  }
+
   return (
-    <li className="space-y-2 py-3">
+    <li className="border px-3.5 py-3">
       <form action={renamePlayerAction} className="flex items-center gap-2">
         <input type="hidden" name="playerId" value={playerId} />
         <Input
           name="name"
           defaultValue={name}
           aria-label={`Name of ${name}`}
-          className="h-8"
-          disabled={retired}
+          className="h-10 text-base uppercase"
         />
-        {retired ? (
-          <Badge variant="secondary">Retired</Badge>
-        ) : (
-          <Button type="submit" variant="outline" size="sm">
-            Rename
-          </Button>
-        )}
+        <Button type="submit" variant="outline" size="sm" className="text-xs">
+          Rename
+        </Button>
       </form>
-      {!retired && (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={copyJoinLink}>
-            {copied ? "Copied!" : "Copy join link"}
-          </Button>
-          <ConfirmActionForm
-            action={rotateTokenAction}
-            playerId={playerId}
-            variant="outline"
-            confirmMessage={`Rotate ${name}'s join link? The old link stops working; already-bound devices stay bound.`}
-          >
-            Rotate link
-          </ConfirmActionForm>
-          <ConfirmActionForm
-            action={retirePlayerAction}
-            playerId={playerId}
-            variant="ghost"
-            confirmMessage={`Retire ${name}? They disappear from pickers and their devices unbind; their match history stays.`}
-          >
-            Retire
-          </ConfirmActionForm>
-        </div>
-      )}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <Button
+          variant="chip"
+          size="xs"
+          onClick={copyJoinLink}
+          className={copied ? "border-accent text-accent" : undefined}
+        >
+          {copied ? "Copied!" : "Copy join link"}
+        </Button>
+        <ConfirmDialog
+          trigger={
+            <Button variant="chip" size="xs">
+              Rotate link
+            </Button>
+          }
+          title="Rotate this join link?"
+          description={`${name}'s old link stops working; already-bound devices stay bound.`}
+          confirmLabel="Rotate"
+          onConfirm={() => act(rotateTokenAction)}
+        />
+        <ConfirmDialog
+          trigger={
+            <Button variant="destructive" size="xs">
+              Retire
+            </Button>
+          }
+          title={`Retire ${name}?`}
+          description="They disappear from pickers and their devices unbind; their match history stays."
+          confirmLabel="Retire"
+          onConfirm={() => act(retirePlayerAction)}
+        />
+      </div>
     </li>
   );
 }

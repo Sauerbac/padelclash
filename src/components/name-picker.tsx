@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { bindByName } from "@/app/actions/binding";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { writeBindingToken } from "@/lib/binding-storage";
 
 type RosterEntry = { id: string; name: string };
@@ -14,7 +16,6 @@ export function NamePicker({ roster }: { roster: RosterEntry[] }) {
   const [failed, setFailed] = useState(false);
 
   function pick(player: RosterEntry) {
-    if (!window.confirm(`Bind this device to ${player.name}?`)) return;
     startTransition(async () => {
       const result = await bindByName(player.id);
       if (result) {
@@ -32,21 +33,26 @@ export function NamePicker({ roster }: { roster: RosterEntry[] }) {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {roster.map((player) => (
-          <Button
+          <ConfirmDialog
             key={player.id}
-            variant="outline"
-            disabled={pending}
-            onClick={() => pick(player)}
-          >
-            {player.name}
-          </Button>
+            trigger={
+              <Button variant="outline" size="sm" disabled={pending}>
+                {player.name}
+              </Button>
+            }
+            title={`Bind this device to ${player.name}?`}
+            description="Every match logged from this device gets credited to them — wins and losses alike. Choose wisely."
+            cancelLabel="Not me"
+            confirmLabel="That's me"
+            onConfirm={() => pick(player)}
+          />
         ))}
       </div>
       {failed && (
-        <p className="text-sm text-destructive">
+        <Alert variant="destructive">
           That didn&apos;t work — the picker may have been turned off. Reload
           and try again, or ask the admin for your join link.
-        </p>
+        </Alert>
       )}
     </div>
   );

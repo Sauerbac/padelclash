@@ -83,16 +83,11 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          <polygon
-            points={`0,100 ${line} 100,100`}
-            fill="var(--chart-1)"
-            opacity="0.1"
-          />
           <polyline
             points={line}
             fill="none"
             stroke="var(--chart-1)"
-            strokeWidth="2"
+            strokeWidth="2.5"
             strokeLinejoin="round"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
@@ -102,7 +97,7 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
         {ticks.slice(1, -1).map((t) => (
           <span
             key={t}
-            className="absolute left-0 -translate-y-full pb-0.5 text-[10px] text-muted-foreground"
+            className="absolute left-0 -translate-y-full pb-0.5 font-mono text-[10px] font-medium text-muted-foreground"
             style={{ top: `${y(t)}%` }}
           >
             {t}
@@ -117,17 +112,20 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
           />
         )}
 
+        {/* Gold match dots; the endpoint dot is primary red. */}
         {dotted.map((c) => (
           <span
             key={c.x}
             aria-hidden
-            className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--chart-1)] shadow-[0_0_0_2px_var(--card)]"
+            className={`absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_0_2px_var(--background)] ${
+              c === last ? "bg-primary" : "bg-[var(--chart-1)]"
+            }`}
             style={{ left: `${c.x}%`, top: `${c.y}%` }}
           />
         ))}
 
         <span
-          className="absolute -translate-y-1/2 pl-2 text-xs font-medium"
+          className="absolute -translate-y-1/2 pl-2 font-mono text-xs font-semibold text-accent"
           style={{ left: `${last.x}%`, top: `${last.y}%` }}
         >
           {Math.round(last.rating)}
@@ -148,30 +146,36 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
 
         {active !== null && (
           <div
-            className="pointer-events-none absolute z-10 rounded-md border bg-popover px-2 py-1 text-popover-foreground shadow-md"
+            className="pointer-events-none absolute z-10 border bg-popover px-2 py-1 text-popover-foreground"
             style={{
               left: `${coords[active].x}%`,
               top: `${coords[active].y - 6}%`,
               transform: `translate(${coords[active].x > 66 ? "-100%" : coords[active].x < 33 ? "0" : "-50%"}, -100%)`,
             }}
           >
-            <div className="text-sm font-semibold tabular-nums">
+            <div className="font-mono text-sm font-semibold tabular-nums">
               {Math.round(coords[active].rating)}
               {coords[active].delta !== null && (
-                <span className="ml-1 font-normal text-muted-foreground">
+                <span
+                  className={`ml-1 font-medium ${
+                    Math.round(coords[active].delta) >= 0
+                      ? "text-win"
+                      : "text-destructive"
+                  }`}
+                >
                   {Math.round(coords[active].delta) >= 0 ? "+" : "−"}
                   {Math.abs(Math.round(coords[active].delta))}
                 </span>
               )}
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="font-mono text-[11px] font-medium text-muted-foreground uppercase">
               {coords[active].label}
             </div>
           </div>
         )}
       </div>
 
-      <div className="mx-2 mt-2 flex justify-between text-xs text-muted-foreground">
+      <div className="mx-2 mt-2 flex justify-between font-mono text-[11px] font-medium text-muted-foreground uppercase">
         <span>{points[0].label}</span>
         <span>{last.label}</span>
       </div>

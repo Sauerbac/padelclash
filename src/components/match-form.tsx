@@ -7,17 +7,11 @@ import {
   logMatchAction,
   type PayoffDelta,
 } from "@/app/actions/matches";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { DeltaBadge } from "@/components/delta-badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { RatingPayoff } from "@/components/rating-payoff";
 import {
   Select,
   SelectContent,
@@ -25,9 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { enqueueMatch } from "@/lib/offline-queue";
 import { uuidv7 } from "@/lib/uuidv7";
+import { cn } from "@/lib/utils";
 
 interface RosterEntry {
   id: string;
@@ -194,78 +188,85 @@ export function MatchForm({
   // No connection: the match is safe on the device, ratings come later.
   if (queued) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Match queued</CardTitle>
-          <CardDescription>You&apos;re offline right now.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            The match is saved on this device and will sync automatically the
-            next time you&apos;re online. It shows as{" "}
-            <span className="font-medium text-foreground">pending sync</span>{" "}
-            in your feed until then.
+      <div className="space-y-4">
+        <section className="border border-accent p-4">
+          <h2 className="font-display text-[26px] leading-none text-accent uppercase">
+            Match queued
+          </h2>
+          <p className="mt-2 text-[15px] font-semibold text-muted-foreground">
+            You&apos;re offline right now. The match is saved on this device
+            and syncs automatically the next time you&apos;re online — until
+            then it shows as{" "}
+            <span className="text-foreground">pending sync</span> in your
+            feed.
           </p>
-          <Button onClick={reset} className="w-full">
-            Log another match
-          </Button>
-        </CardContent>
-      </Card>
+        </section>
+        <Button onClick={reset} className="w-full">
+          Log another match
+        </Button>
+      </div>
     );
   }
 
   // The payoff moment: every participant's rating change, front and center.
   if (payoff) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{editing ? "Match updated" : "Match logged"}</CardTitle>
-          <CardDescription>Ratings have been updated.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ul className="space-y-2">
-            {payoff.map((d) => (
-              <li key={d.playerId} className="flex items-center gap-2 text-sm">
-                <span className="flex-1 font-medium">{d.name}</span>
-                <span className="text-muted-foreground">
-                  {Math.round(d.ratingBefore)} → {Math.round(d.ratingAfter)}
-                </span>
-                <DeltaBadge delta={d.delta} />
-              </li>
-            ))}
-          </ul>
-          {editing ? (
-            <Button asChild className="w-full">
-              <Link href="/">Back to feed</Link>
-            </Button>
-          ) : (
-            <Button onClick={reset} className="w-full">
-              Log another match
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <RatingPayoff
+          title={editing ? "Match updated" : "Match logged"}
+          deltas={payoff}
+        />
+        {editing ? (
+          <Button asChild variant="outline" className="h-11 w-full">
+            <Link href="/">Back to feed</Link>
+          </Button>
+        ) : (
+          <Button onClick={reset} className="w-full">
+            Log another match
+          </Button>
+        )}
+      </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Label htmlFor="doubles">Doubles</Label>
-        <Switch
-          id="doubles"
-          checked={doubles}
-          onCheckedChange={(on) => {
-            setDoubles(on);
-            if (!on) setSlots((s) => ({ ...s, a2: "", b2: "" }));
-          }}
-        />
+    <div className="space-y-4">
+      {/* Singles/doubles segmented toggle: wrapper carries the border. */}
+      <div className="flex border" role="group" aria-label="Match mode">
+        {([false, true] as const).map((mode) => (
+          <Button
+            key={String(mode)}
+            type="button"
+            variant={doubles === mode ? "default" : "ghost"}
+            aria-pressed={doubles === mode}
+            onClick={() => {
+              setDoubles(mode);
+              if (!mode) setSlots((s) => ({ ...s, a2: "", b2: "" }));
+            }}
+            className={cn(
+              "h-auto flex-1 py-2.5 font-sans text-sm tracking-[2px]",
+              doubles === mode ? "font-bold" : "font-semibold",
+            )}
+          >
+            {mode ? "Doubles" : "Singles"}
+          </Button>
+        ))}
       </div>
 
       {(["A", "B"] as const).map((side) => (
-        <fieldset key={side} className="space-y-2">
-          <legend className="text-sm font-medium">Side {side}</legend>
-          {slotsFor(side).map((slot) => (
+        <fieldset key={side} className="border px-3.5 pt-3.5 pb-4">
+          <legend className="sr-only">Side {side}</legend>
+          <div
+            aria-hidden
+            className={cn(
+              "section-label",
+              side === "A" ? "text-primary" : "text-accent",
+            )}
+          >
+            Side {side}
+          </div>
+          <div className="mt-2.5 flex flex-col gap-2">
+            {slotsFor(side).map((slot) => (
               <PlayerSelect
                 key={slot}
                 value={slots[slot]}
@@ -277,29 +278,51 @@ export function MatchForm({
                 )}
               />
             ))}
+          </div>
         </fieldset>
       ))}
 
-      <div className="space-y-2">
-        <Label>Winner</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {(["A", "B"] as const).map((side) => (
-            <Button
-              key={side}
-              type="button"
-              variant={winner === side ? "default" : "outline"}
-              onClick={() => setWinner(side)}
-              className="truncate"
-            >
-              {sideLabel(side)}
-            </Button>
+      {/* Winner picker: two Anton plates around a gold VS. */}
+      <div>
+        <div className="section-label mb-2.5">Who took the W?</div>
+        <div
+          className="flex items-stretch gap-2.5"
+          role="group"
+          aria-label="Winner"
+        >
+          {(["A", "B"] as const).map((side, i) => (
+            <span key={side} className="contents">
+              {i > 0 && (
+                <span
+                  aria-hidden
+                  className="self-center font-display text-base text-accent"
+                >
+                  VS
+                </span>
+              )}
+              <Button
+                type="button"
+                variant={winner === side ? "default" : "outline"}
+                aria-pressed={winner === side}
+                onClick={() => setWinner(side)}
+                className={cn(
+                  "h-auto min-w-0 flex-1 px-1.5 py-4 font-display text-xl leading-[1.1] font-normal tracking-normal whitespace-normal",
+                  winner !== side && "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {sideLabel(side)}
+              </Button>
+            </span>
           ))}
         </div>
       </div>
 
-      <div className="space-y-2">
+      {/* Set scores: optional detail, centred flat score cells. */}
+      <div className="border p-3.5">
         <div className="flex items-center justify-between">
-          <Label htmlFor="record-sets">Set scores</Label>
+          <label htmlFor="record-sets" className="section-label">
+            Set scores
+          </label>
           <Switch
             id="record-sets"
             checked={recordSets}
@@ -307,10 +330,10 @@ export function MatchForm({
           />
         </div>
         {recordSets ? (
-          <div className="space-y-2">
+          <div className="mt-3 flex flex-col gap-2">
             {sets.map((set, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="w-10 text-sm text-muted-foreground">
+              <div key={i} className="flex items-center gap-2.5">
+                <span className="w-13 text-sm font-semibold tracking-[2px] text-muted-foreground uppercase">
                   Set {i + 1}
                 </span>
                 <Input
@@ -327,8 +350,9 @@ export function MatchForm({
                       ),
                     )
                   }
+                  className="h-10 w-14 shrink-0 px-0 text-center text-lg [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
-                <span className="text-muted-foreground">–</span>
+                <span className="text-muted-foreground">—</span>
                 <Input
                   type="number"
                   min={0}
@@ -343,13 +367,15 @@ export function MatchForm({
                       ),
                     )
                   }
+                  className="h-10 w-14 shrink-0 px-0 text-center text-lg [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 {sets.length > 1 && (
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="icon-xs"
                     aria-label={`Remove set ${i + 1}`}
+                    className="ml-auto"
                     onClick={() =>
                       setSets((rows) => rows.filter((_, j) => j !== i))
                     }
@@ -362,42 +388,52 @@ export function MatchForm({
             {sets.length < 5 && (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="xs"
                 onClick={() => setSets((rows) => [...rows, { a: "", b: "" }])}
+                className="mt-0.5 w-fit px-0 text-sm text-accent hover:text-foreground"
               >
-                Add set
+                + Add set
               </Button>
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
             Off — just the winner is recorded.
           </p>
         )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="played-at">Played at</Label>
+      {/* Played at: native datetime-local styled as a bordered row. */}
+      <div className="flex items-center justify-between gap-3 border py-1.5 pr-2 pl-3.5">
+        <label htmlFor="played-at" className="section-label shrink-0">
+          Played at
+        </label>
         <Input
           id="played-at"
           type="datetime-local"
           value={playedAt}
           onChange={(e) => setPlayedAt(e.target.value)}
           suppressHydrationWarning
+          className="h-9 w-fit bg-transparent px-1 text-right font-mono text-sm font-medium [color-scheme:dark]"
         />
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <Alert variant="destructive">{error}</Alert>}
 
-      <Button onClick={submit} disabled={pending} className="w-full">
+      <Button
+        onClick={submit}
+        disabled={pending}
+        size="lg"
+        className="w-full text-[22px]"
+      >
         {editing
           ? pending
             ? "Saving…"
             : "Save changes"
           : pending
             ? "Logging…"
-            : "Log match"}
+            : "Log it. Own it."}
       </Button>
     </div>
   );
