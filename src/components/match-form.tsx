@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { enqueueMatch } from "@/lib/offline-queue";
 import { uuidv7 } from "@/lib/uuidv7";
 
 interface RosterEntry {
@@ -108,6 +109,7 @@ export function MatchForm({
 
   const [error, setError] = useState<string | null>(null);
   const [payoff, setPayoff] = useState<PayoffDelta[] | null>(null);
+  const [queued, setQueued] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // The side→slots mapping, in one place: which slot keys a side uses (and
@@ -151,21 +153,65 @@ export function MatchForm({
         winnerSide: winner,
         sets: parsedSets,
       };
-      const result = editing
-        ? await editMatchAction(payload)
-        : await logMatchAction(payload);
-      if (result.ok) setPayoff(result.deltas);
-      else setError(result.error);
+      // Offline log queue (spec "PWA & offline"): a log that can't reach the
+      // server is queued locally and synced later. Edits stay online-only.
+      const queueLocally = async () => {
+        await enqueueMatch({
+          ...payload,
+          names: {
+            A: sideIds("A").map((id) => nameOf(id) ?? "Unknown"),
+            B: sideIds("B").map((id) => nameOf(id) ?? "Unknown"),
+          },
+          queuedAt: new Date().toISOString(),
+        });
+        setQueued(true);
+      };
+      if (!editing && !navigator.onLine) return queueLocally();
+      try {
+        const result = editing
+          ? await editMatchAction(payload)
+          : await logMatchAction(payload);
+        if (result.ok) setPayoff(result.deltas);
+        else setError(result.error);
+      } catch {
+        // The action call itself failed — no connection.
+        if (editing) setError("You're offline — edits need a connection.");
+        else await queueLocally();
+      }
     });
   }
 
   function reset() {
     setPayoff(null);
+    setQueued(false);
     setSlots({ a1: loggerId ?? "", a2: "", b1: "", b2: "" });
     setWinner(null);
     setRecordSets(false);
     setSets([{ a: "", b: "" }]);
     setPlayedAt(nowLocal());
+  }
+
+  // No connection: the match is safe on the device, ratings come later.
+  if (queued) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Match queued</CardTitle>
+          <CardDescription>You&apos;re offline right now.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            The match is saved on this device and will sync automatically the
+            next time you&apos;re online. It shows as{" "}
+            <span className="font-medium text-foreground">pending sync</span>{" "}
+            in your feed until then.
+          </p>
+          <Button onClick={reset} className="w-full">
+            Log another match
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   // The payoff moment: every participant's rating change, front and center.

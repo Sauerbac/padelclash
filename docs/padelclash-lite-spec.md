@@ -272,3 +272,10 @@ they earned interest during the grilling:
 | 23 | App icons | Generated at build time from one JSX mark via next/og ImageResponse — no binary icon assets in the repo |
 | 24 | Service worker | Hand-rolled app-shell worker, no Serwist/Workbox dependency: network-first navigations with cache fallback, cache-first for build-hashed assets; `/api`, `/admin`, `/join` are never cached (tokens/admin state don't belong in Cache Storage) |
 | 25 | SW in dev | `next dev` actively unregisters any service worker — a compose image smoke test on port 3000 would otherwise leave a prod worker serving stale chunks into dev |
+
+## Decision log (2026-07-19, offline queue slice)
+
+| # | Decision | Call |
+|---|---|---|
+| 26 | Failed sync | A queued match the server rejects (not a connectivity failure) is never silently dropped: it stays on the pending card with the error shown and an explicit Discard button |
+| 27 | Offline edits | Only logging queues offline. Edit/delete need a connection and say so — the 24 h grace window plus replay-on-edit makes queued edits more machinery than a typo repair is worth |

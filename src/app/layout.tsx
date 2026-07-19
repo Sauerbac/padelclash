@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BindingRecovery } from "@/components/binding-recovery";
+import { OfflineSync } from "@/components/offline-sync";
 import { SwRegister } from "@/components/sw-register";
 import { hasPlayerBinding } from "@/services/auth/binding";
 import "./globals.css";
@@ -44,6 +45,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <SwRegister />
+        <OfflineSync />
         <BindingRecovery isBound={isBound} />
         {children}
       </body>

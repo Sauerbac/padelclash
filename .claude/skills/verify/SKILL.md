@@ -41,8 +41,11 @@ description: Build, launch, and drive PadelClash Lite locally to verify changes 
 ## Cleanup
 
 - Reset dev data: `docker exec paddleclash-db-1 psql -U postgres -d
-  padelclash -c "truncate players, settings"` (add tables as slices
-  add them).
+  padelclash -c "truncate players, matches, match_participants,
+  rating_history, current_rating, settings cascade"`. If truncate is
+  blocked, seed uniquely-named rows instead and delete them afterwards —
+  multiple statements in one `psql -c` run as a single transaction, so
+  put every dependent delete in the same `-c`.
 - Integration tests use separate `padelclash_test_N` databases (one
   per vitest worker) on the same server — dev data and tests never
   collide.

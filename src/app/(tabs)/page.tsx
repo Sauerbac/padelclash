@@ -1,6 +1,7 @@
 import { canModifyMatch } from "@/domain/edit-rights";
 import { MatchCard } from "@/components/match-card";
 import { NamePicker } from "@/components/name-picker";
+import { QueuedMatches } from "@/components/queued-matches";
 import {
   Card,
   CardContent,
@@ -57,6 +58,8 @@ export default async function FeedPage() {
           for your personal join link.
         </p>
       )}
+
+      <QueuedMatches />
 
       {feed.length === 0 ? (
         <p className="text-sm text-muted-foreground">
