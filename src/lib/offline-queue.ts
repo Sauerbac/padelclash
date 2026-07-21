@@ -5,6 +5,11 @@ import type { LogMatchPayload } from "@/app/actions/matches";
  * connection waits in IndexedDB until the network returns. The client-side
  * UUIDv7 id doubles as the idempotency key, so a retried sync can't
  * double-log. Browser-only — every caller is a client component.
+ *
+ * Each item carries `ownerPlayerId` (inherited from LogMatchPayload): the
+ * Player who queued it. The server refuses to accept it under any other
+ * identity (spec decision 52), so a device rebound to someone else gets an
+ * `identity-mismatch` refusal rather than silent re-attribution.
  */
 export interface QueuedMatch extends LogMatchPayload {
   /** Player names per side at queue time, so the pending card renders offline. */

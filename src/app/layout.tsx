@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Barlow_Condensed, IBM_Plex_Mono } from "next/font/google";
-import { BindingRecovery } from "@/components/binding-recovery";
 import { OfflineSync } from "@/components/offline-sync";
 import { SwRegister } from "@/components/sw-register";
-import { hasPlayerBinding } from "@/services/auth/binding";
 import "./globals.css";
 
 const anton = Anton({
@@ -38,14 +36,14 @@ export const viewport: Viewport = {
   themeColor: "#16110d",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Cookie presence only — no DB in the root layout, so every route renders
-  // even with Postgres down. Pages that need the player row query themselves.
-  const isBound = await hasPlayerBinding();
+  // No auth work here on purpose: binding validity is a database question now
+  // (a cookie's presence proves nothing), and the root layout must still render
+  // with Postgres down. Pages resolve the viewer themselves.
   return (
     <html
       lang="en"
@@ -54,7 +52,6 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <SwRegister />
         <OfflineSync />
-        <BindingRecovery isBound={isBound} />
         {children}
       </body>
     </html>

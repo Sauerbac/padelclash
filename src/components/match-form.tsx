@@ -127,6 +127,11 @@ export function MatchForm({
     const filled = activeSlots.every((s) => slots[s] !== "");
     if (!filled) return setError("Pick a player for every slot.");
     if (!winner) return setError("Pick the winning side.");
+    // Every Match needs a Player Logger (spec decision 49). The Log Match page
+    // doesn't render this form unbound, so this is a backstop, not a flow.
+    if (!editing && !loggerId) {
+      return setError("Join as a player on this device before logging.");
+    }
     const parsedSets = recordSets
       ? sets.map((s) => ({ a: Number(s.a), b: Number(s.b) }))
       : null;
@@ -149,9 +154,12 @@ export function MatchForm({
       };
       // Offline log queue (spec "PWA & offline"): a log that can't reach the
       // server is queued locally and synced later. Edits stay online-only.
+      // The queued item records who logged it, so a device later rebound to
+      // another player can't sync it under that identity (decision 52).
       const queueLocally = async () => {
         await enqueueMatch({
           ...payload,
+          ownerPlayerId: loggerId ?? "",
           names: {
             A: sideIds("A").map((id) => nameOf(id) ?? "Unknown"),
             B: sideIds("B").map((id) => nameOf(id) ?? "Unknown"),
@@ -164,7 +172,7 @@ export function MatchForm({
       try {
         const result = editing
           ? await editMatchAction(payload)
-          : await logMatchAction(payload);
+          : await logMatchAction({ ...payload, ownerPlayerId: loggerId ?? "" });
         if (result.ok) setPayoff(result.deltas);
         else setError(result.error);
       } catch {

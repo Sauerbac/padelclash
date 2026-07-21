@@ -1,26 +1,22 @@
 import Image from "next/image";
 import { canModifyMatch } from "@/domain/edit-rights";
 import { MatchCard } from "@/components/match-card";
-import { NamePicker } from "@/components/name-picker";
+import { NotJoined } from "@/components/not-joined";
 import { PageHeader } from "@/components/page-header";
 import { QueuedMatches } from "@/components/queued-matches";
-import { isAdmin } from "@/services/auth/admin";
-import { getBoundPlayer } from "@/services/auth/binding";
+import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
 import { getFeed } from "@/services/matches";
-import { listActivePlayers } from "@/services/players";
-import { getSettings } from "@/services/settings";
 
 export default async function FeedPage() {
-  const db = getDb();
-  const [you, admin, settings, roster, feed] = await Promise.all([
-    getBoundPlayer(),
-    isAdmin(),
-    getSettings(db),
-    listActivePlayers(db),
-    getFeed(db),
-  ]);
-  const viewer = { playerId: you?.id ?? null, isAdmin: admin };
+  // Before any query: an unbound visitor must not reach the match log, not
+  // even into this response's payload (spec decision 33).
+  const access = await viewerForPrivateRead();
+  if (!access) return <NotJoined />;
+
+  const { player: you, isAdmin } = access;
+  const feed = await getFeed(getDb());
+  const viewer = { playerId: you?.id ?? null, isAdmin };
   const now = new Date();
 
   return (
@@ -46,20 +42,12 @@ export default async function FeedPage() {
           Logging as <span className="text-accent uppercase">{you.name}</span>{" "}
           — new matches from this device are credited to you.
         </p>
-      ) : settings.namePickerEnabled ? (
-        <section className="border p-3.5">
-          <h2 className="section-label">Who are you?</h2>
-          <p className="mt-1 text-sm font-semibold text-muted-foreground">
-            Pick your name to bind this device to you.
-          </p>
-          <div className="mt-3">
-            <NamePicker roster={roster.map(({ id, name }) => ({ id, name }))} />
-          </div>
-        </section>
       ) : (
+        // The only way to be here unbound is an Admin session browsing past
+        // the read gate (spec decision 49) — and Admin can't log a match.
         <p className="text-[15px] font-semibold text-muted-foreground">
-          This device isn&apos;t bound to a player yet. Ask the group admin
-          for your personal join link.
+          Viewing as admin. Logging a match needs a joined player on this
+          device.
         </p>
       )}
 

@@ -1,6 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -8,30 +11,122 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
-// Roster of the circle. No accounts: a player is just a row, bound to devices
-// via personal_token (see spec "Identity & access").
-export const players = pgTable("players", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  avatar: text("avatar"),
-  personalToken: text("personal_token").notNull().unique(),
-  // Retired players are hidden from pickers but keep their match history.
-  retiredAt: timestamp("retired_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+// Roster of the circle. No accounts: a Player is just a row, and access is a
+// separate artifact (device_bindings below). See spec "Identity & access".
+export const players = pgTable(
+  "players",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    // The case-folded key from domain/player-name.ts. Uniqueness is enforced
+    // here rather than in application code so concurrent joins can't both win.
+    normalizedName: text("normalized_name").notNull(),
+    avatar: text("avatar"),
+    // Retired players are hidden from pickers but keep their match history —
+    // and keep reserving their name (spec decision 30).
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("players_normalized_name_key").on(t.normalizedName)],
+);
 
-// Single-row app settings. The fixed id makes "the one row" an upsert target.
-export const SETTINGS_SINGLETON_ID = "singleton";
+export const invitationKind = pgEnum("invitation_kind", [
+  "general",
+  "personal",
+]);
 
-export const settings = pgTable("settings", {
-  id: text("id").primaryKey().default(SETTINGS_SINGLETON_ID),
-  namePickerEnabled: boolean("name_picker_enabled").notNull().default(false),
-});
+/**
+ * Onboarding Links (spec "Onboarding Links"). Unlike a Device Binding, the
+ * token is stored in the clear: Admin must be able to re-copy a live link
+ * (decisions 36 and 40), which a hash cannot reproduce. The exposure is
+ * bounded — a leaked row buys onboarding capability for at most the link's
+ * 12 h / 7 d lifetime, and Admin can revoke it.
+ */
+export const onboardingInvitations = pgTable(
+  "onboarding_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: invitationKind("kind").notNull(),
+    // The invited Player for a Personal Link; null for the circle-wide
+    // General Link (see the check constraint below).
+    playerId: uuid("player_id").references(() => players.id, {
+      onDelete: "cascade",
+    }),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    // Single-use: set by the join that spends a Personal Link. A General Link
+    // onboards several Players, so it is never consumed — only expired/revoked.
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  },
+  (t) => [
+    check(
+      "onboarding_invitations_player_matches_kind",
+      sql`(${t.kind} = 'personal' and ${t.playerId} is not null)
+          or (${t.kind} = 'general' and ${t.playerId} is null)`,
+    ),
+    // At most one valid Personal Link per Player (spec decision 40). Expiry
+    // isn't in the predicate — a moving target like now() can't be indexed —
+    // so issuing a replacement explicitly revokes the previous row first.
+    uniqueIndex("onboarding_invitations_one_active_personal")
+      .on(t.playerId)
+      .where(
+        sql`kind = 'personal' and revoked_at is null and consumed_at is null`,
+      ),
+    // At most one General Link for the whole circle (spec decision 36). Same
+    // deal: generating the next one revokes the expired predecessor.
+    uniqueIndex("onboarding_invitations_one_active_general")
+      .on(t.kind)
+      .where(sql`kind = 'general' and revoked_at is null`),
+  ],
+);
+
+/**
+ * Device Bindings (spec "Device Binding"): the one active bearer credential
+ * authorizing access as a Player. Only the hash is stored — the plaintext
+ * exists solely in the holder's HttpOnly cookie. Revoked rows are kept for the
+ * troubleshooting history of decision 53.
+ */
+export const deviceBindings = pgTable(
+  "device_bindings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    // Which invitation created this binding — accountability that survives the
+    // invitation being superseded.
+    createdViaInvitationId: uuid("created_via_invitation_id").references(
+      () => onboardingInvitations.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    // One active binding per Player (spec decision 28), enforced by the
+    // database so a race between two confirmations can't produce two.
+    uniqueIndex("device_bindings_one_active_per_player")
+      .on(t.playerId)
+      .where(sql`revoked_at is null`),
+    index("device_bindings_player_idx").on(t.playerId),
+  ],
+);
 
 export const matchSide = pgEnum("match_side", ["A", "B"]);
 
@@ -110,7 +205,8 @@ export const currentRating = pgTable("current_rating", {
 });
 
 export type Player = typeof players.$inferSelect;
-export type Settings = typeof settings.$inferSelect;
+export type DeviceBinding = typeof deviceBindings.$inferSelect;
+export type OnboardingInvitation = typeof onboardingInvitations.$inferSelect;
 export type Match = typeof matches.$inferSelect;
 export type MatchParticipant = typeof matchParticipants.$inferSelect;
 export type RatingHistoryRow = typeof ratingHistory.$inferSelect;

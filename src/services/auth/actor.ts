@@ -1,13 +1,13 @@
 import type { MatchActor } from "../../domain/edit-rights";
-import { isAdmin } from "./admin";
-import { getBoundPlayer } from "./binding";
+import { currentViewer } from "./authz";
 
 /**
- * Who is asking, from the cookies: the bound player (if any) and whether the
- * browser holds an admin session. An unbound admin device still counts as
- * admin. The single source for edit-rights checks in actions and pages.
+ * Who is asking, in the shape the edit-rights rules want: the bound Player (if
+ * any) and whether this browser holds an Admin session. An unbound Admin device
+ * still counts as Admin. The single source for edit-rights checks in actions
+ * and pages.
  */
 export async function currentActor(): Promise<MatchActor> {
-  const [player, admin] = await Promise.all([getBoundPlayer(), isAdmin()]);
-  return { playerId: player?.id ?? null, isAdmin: admin };
+  const viewer = await currentViewer();
+  return { playerId: viewer.player?.id ?? null, isAdmin: viewer.isAdmin };
 }

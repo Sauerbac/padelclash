@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canModifyMatch } from "@/domain/edit-rights";
 import { MatchForm } from "@/components/match-form";
+import { NotJoined } from "@/components/not-joined";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { currentActor } from "@/services/auth/actor";
+import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
 import { getMatch } from "@/services/matches";
 import { listActivePlayers } from "@/services/players";
@@ -17,6 +19,9 @@ export default async function EditMatchPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // Gate before the query — see viewerForPrivateRead.
+  if (!(await viewerForPrivateRead())) return <NotJoined />;
+
   const db = getDb();
   const [viewer, roster, found] = await Promise.all([
     currentActor(),

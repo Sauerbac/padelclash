@@ -22,6 +22,20 @@
       "when": 1783843427880,
       "tag": "0002_matches_projections",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784654909830,
+      "tag": "0003_secure_onboarding_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784655034080,
+      "tag": "0004_secure_onboarding_cutover",
+      "breakpoints": true
     }
   ]
 }

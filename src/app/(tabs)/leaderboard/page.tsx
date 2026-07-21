@@ -7,17 +7,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getBoundPlayer } from "@/services/auth/binding";
+import { NotJoined } from "@/components/not-joined";
+import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
 import { getLeaderboard } from "@/services/matches";
 import { DEFAULT_RANKED_THRESHOLD } from "@/domain/rating/engine";
 
 export default async function LeaderboardPage() {
-  const db = getDb();
-  const [you, entries] = await Promise.all([
-    getBoundPlayer(),
-    getLeaderboard(db),
-  ]);
+  // Gate before the query — see viewerForPrivateRead.
+  const access = await viewerForPrivateRead();
+  if (!access) return <NotJoined />;
+
+  const you = access.player;
+  const entries = await getLeaderboard(getDb());
   const hasUnranked = entries.some((e) => e.rank === null);
 
   return (
