@@ -160,6 +160,9 @@ export function MatchForm({
         await enqueueMatch({
           ...payload,
           ownerPlayerId: loggerId ?? "",
+          // Captured now: if this device is later rebound to someone else,
+          // the stuck card still has to name whose match it is.
+          ownerPlayerName: (loggerId ? nameOf(loggerId) : null) ?? "You",
           names: {
             A: sideIds("A").map((id) => nameOf(id) ?? "Unknown"),
             B: sideIds("B").map((id) => nameOf(id) ?? "Unknown"),

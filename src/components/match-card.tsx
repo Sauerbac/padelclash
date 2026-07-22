@@ -19,9 +19,17 @@ const playedAtFormat = new Intl.DateTimeFormat("en-GB", {
 export function MatchCard({
   match,
   canModify,
+  showLogger = false,
 }: {
   match: FeedMatch;
   canModify: boolean;
+  /**
+   * Admin only (spec decision 53). Every Match records who logged it, and
+   * Admin is the one who has to answer "who entered this?" when a result is
+   * disputed. Members don't get it: inside one circle it adds nothing but a
+   * way to keep score of who does the admin chores.
+   */
+  showLogger?: boolean;
 }) {
   const winners = match.participants.filter(
     (p) => p.side === match.winnerSide,
@@ -58,6 +66,7 @@ export function MatchCard({
       <p className="mt-1 font-mono text-xs font-medium text-muted-foreground">
         {playedAtFormat.format(match.playedAt)}
         {setsText && <> · {setsText}</>}
+        {showLogger && <> · logged by {match.loggedByName}</>}
       </p>
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         {[...winners, ...losers].map((p) => (

@@ -5,6 +5,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { isPermanentRefusal } from "@/domain/sync-policy";
 import {
   QUEUE_CHANGED_EVENT,
   listQueuedMatches,
@@ -61,8 +62,19 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
     )
     .join(", ");
 
+  // A refusal that retrying can't fix is the only one that becomes the user's
+  // problem to resolve (decision 26). "Waiting for a connection" and "the
+  // server is busy" resolve themselves, so they get a status line, not a
+  // decision — offering Discard for those invites people to delete matches
+  // that were about to sync fine.
+  const stuck = isPermanentRefusal(match.syncCode);
+
   return (
-    <article className="border border-dashed border-accent px-3.5 py-3">
+    <article
+      className={`border border-dashed px-3.5 py-3 ${
+        stuck ? "border-destructive-border" : "border-accent"
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="text-lg font-semibold uppercase">
           {winners.join(" & ")}
@@ -72,17 +84,24 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
           </span>
           <span className="text-muted-foreground">{losers.join(" & ")}</span>
         </p>
-        <Badge variant="pending">Pending sync</Badge>
+        <Badge variant={stuck ? "retired" : "pending"}>
+          {stuck ? "Can't sync" : "Pending sync"}
+        </Badge>
       </div>
       <p className="mt-1 font-mono text-xs font-medium text-muted-foreground">
         {playedAtFormat.format(new Date(match.playedAt))}
-        {setsText && <> · {setsText}</>}
+        {setsText && <> · {setsText}</>} · logged by {match.ownerPlayerName}
       </p>
-      {match.syncError && (
+
+      {match.syncError && !stuck && (
+        <p className="mt-2 text-sm font-semibold text-muted-foreground">
+          {match.syncError} It stays on this device and syncs by itself.
+        </p>
+      )}
+
+      {stuck && (
         <div className="mt-2.5 space-y-2.5">
-          <Alert variant="destructive">
-            Couldn&apos;t sync: {match.syncError}
-          </Alert>
+          <Alert variant="destructive">{match.syncError}</Alert>
           <ConfirmDialog
             trigger={
               <Button variant="destructive" size="xs">
@@ -90,7 +109,7 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
               </Button>
             }
             title="Discard this queued match?"
-            description="It never reached the server — discarding removes it from this device for good."
+            description={`It never reached the server and can't be sent from this device any more. Discarding removes ${match.ownerPlayerName}'s match for good — if it still matters, have them log it again from theirs.`}
             confirmLabel="Discard"
             onConfirm={() => removeQueuedMatch(match.id)}
           />

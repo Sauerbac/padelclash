@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { MatchSide } from "@/domain/rating/engine";
+import type { MatchSyncRefusal } from "@/domain/sync-policy";
 import { UUIDV7_PATTERN } from "@/lib/uuidv7";
 import { currentActor } from "@/services/auth/actor";
 import { requireLogger, requirePrivateRead } from "@/services/auth/authz";
@@ -56,16 +57,15 @@ export interface PayoffDelta {
 }
 
 /**
- * Why a write was refused. The frontend has to distinguish these: only
- * `identity-mismatch` and `invalid` mean a queued match is permanently
- * un-syncable and should offer the explicit Discard of decision 26.
+ * Why a write was refused. The frontend has to distinguish these, because they
+ * decide whether a queued match is worth retrying or is permanently stuck and
+ * needs the explicit Discard of decision 26.
+ *
+ * Aliased to the domain type rather than restated so the two can't drift: the
+ * offline queue's classification is an exhaustive switch over this union, and
+ * a code added here without a decision there would fall straight through it.
  */
-export type MatchMutationError =
-  | "not-bound"
-  | "identity-mismatch"
-  | "not-allowed"
-  | "rate-limited"
-  | "invalid";
+export type MatchMutationError = MatchSyncRefusal;
 
 export type LogMatchActionResult =
   | { ok: true; deltas: PayoffDelta[]; alreadyLogged: boolean }

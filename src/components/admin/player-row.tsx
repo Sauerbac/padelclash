@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   deletePlayerAction,
   generatePersonalLinkAction,
+  getBindingHistoryAction,
   renamePlayerAction,
   restorePlayerAction,
   retirePlayerAction,
@@ -11,6 +12,7 @@ import {
   revokePersonalLinkAction,
   type AdminResult,
 } from "@/app/actions/admin";
+import type { BindingRecord } from "@/services/access";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,12 +67,23 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
         {entry.status === "retired" && <Badge variant="retired">Retired</Badge>}
       </div>
 
+      {/* What Admin gets to know about a device (spec decision 53): when it
+          was bound and when it last checked in — enough to answer "is this
+          still the phone they're using?" — and nothing that identifies the
+          hardware itself. */}
       {entry.binding && (
         <p className="mt-1.5 font-mono text-xs font-medium text-muted-foreground">
           joined {formatDate(entry.binding.createdAt)} · last seen{" "}
           {formatDate(entry.binding.lastSeenAt)}
         </p>
       )}
+      {entry.personalLink && (
+        <p className="mt-1 font-mono text-xs font-medium text-accent">
+          invite valid until {formatDate(entry.personalLink.expiresAt)}
+        </p>
+      )}
+
+      <BindingHistory playerId={entry.id} name={entry.name} />
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {entry.personalLink && (
@@ -177,6 +190,72 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * The retained record of devices that were bound and stopped working (spec
+ * decision 53) — the thing Admin needs when someone says "I lost my phone" or
+ * "it stopped working last week" and nobody can remember what was done.
+ *
+ * Loaded on demand rather than with the roster: it is one query per Player,
+ * consulted rarely, and irrelevant to the roster's usual job. Deliberately
+ * hash-free — nothing shown here can be replayed as a credential.
+ */
+function BindingHistory({ playerId, name }: { playerId: string; name: string }) {
+  const [records, setRecords] = useState<BindingRecord[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, startTransition] = useTransition();
+
+  function toggle() {
+    if (open) return setOpen(false);
+    setOpen(true);
+    if (records) return;
+    startTransition(async () => setRecords(await getBindingHistoryAction(playerId)));
+  }
+
+  // Only past devices are news; the active one is already on the row above.
+  const past = records?.filter((record) => !record.active) ?? [];
+
+  return (
+    <div className="mt-1.5">
+      <Button
+        variant="link"
+        size="xs"
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="h-auto px-0 font-mono text-xs font-medium text-muted-foreground underline hover:text-foreground"
+      >
+        {open ? "Hide device history" : "Device history"}
+      </Button>
+
+      {open && (
+        <div className="mt-1.5 border-l border-hairline pl-2.5">
+          {loading && !records ? (
+            <p className="font-mono text-xs font-medium text-muted-foreground">
+              loading…
+            </p>
+          ) : past.length === 0 ? (
+            <p className="font-mono text-xs font-medium text-muted-foreground">
+              no previous devices for {name}
+            </p>
+          ) : (
+            <ul className="space-y-0.5">
+              {past.map((record) => (
+                <li
+                  key={record.id}
+                  className="font-mono text-xs font-medium text-muted-foreground"
+                >
+                  {formatDate(record.createdAt)} → {formatDate(record.lastSeenAt)}
+                  {record.revokedAt && <> · ended {formatDate(record.revokedAt)}</>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

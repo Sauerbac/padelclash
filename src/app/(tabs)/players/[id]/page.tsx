@@ -109,6 +109,7 @@ export default async function PlayerDetailPage({
               key={match.id}
               match={match}
               canModify={canModifyMatch(match, viewer, now)}
+              showLogger={viewer.isAdmin}
             />
           ))
         )}

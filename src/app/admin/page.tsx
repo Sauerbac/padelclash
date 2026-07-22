@@ -22,8 +22,9 @@ export default async function AdminPage() {
   }
 
   const db = getDb();
+  const now = new Date();
   const [roster, generalLink] = await Promise.all([
-    getAdminRoster(db),
+    getAdminRoster(db, now),
     getGeneralLink(db),
   ]);
 
@@ -49,7 +50,14 @@ export default async function AdminPage() {
       <section>
         <h2 className="section-label text-primary">Onboarding</h2>
         <div className="mt-2.5">
-          <GeneralLinkControl link={generalLink} />
+          <GeneralLinkControl
+            link={generalLink}
+            msRemaining={
+              generalLink
+                ? generalLink.expiresAt.getTime() - now.getTime()
+                : null
+            }
+          />
         </div>
       </section>
 

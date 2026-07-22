@@ -64,6 +64,7 @@ export default async function FeedPage() {
               key={match.id}
               match={match}
               canModify={canModifyMatch(match, viewer, now)}
+              showLogger={isAdmin}
             />
           ))}
         </div>

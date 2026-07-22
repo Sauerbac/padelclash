@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Barlow_Condensed, IBM_Plex_Mono } from "next/font/google";
 import { OfflineSync } from "@/components/offline-sync";
+import { SessionWatch } from "@/components/session-watch";
 import { SwRegister } from "@/components/sw-register";
 import "./globals.css";
 
@@ -51,6 +52,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <SwRegister />
+        {/* Order matters: SessionWatch may discover the binding is gone, and
+            a queue flush against a revoked credential is wasted work. */}
+        <SessionWatch />
         <OfflineSync />
         {children}
       </body>

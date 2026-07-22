@@ -404,6 +404,12 @@ export interface FeedMatch {
   playedAt: Date;
   loggedAt: Date;
   loggedBy: string;
+  /**
+   * Display name for `loggedBy` — the Logger attribution Admin sees (spec
+   * decision 53). Resolved here because the Logger need not be a participant,
+   * so the card's own name list can't be relied on to contain them.
+   */
+  loggedByName: string;
   winnerSide: MatchSide;
   sets: SetScore[] | null;
   participants: FeedParticipant[];
@@ -443,6 +449,7 @@ export async function getFeed(db: Db): Promise<FeedMatch[]> {
     playedAt: m.playedAt,
     loggedAt: m.loggedAt,
     loggedBy: m.loggedBy,
+    loggedByName: nameById.get(m.loggedBy) ?? "Unknown",
     winnerSide: m.winnerSide,
     sets: m.sets,
     participants: (byMatch.get(m.id) ?? [])
