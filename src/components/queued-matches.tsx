@@ -1,10 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  MatchHeadline,
+  MatchPlayerNames,
+  PlayedAt,
+  SetsRow,
+  setScores,
+} from "@/components/match-card-parts";
 import { isPermanentRefusal } from "@/domain/sync-policy";
 import {
   QUEUE_CHANGED_EVENT,
@@ -12,15 +18,6 @@ import {
   removeQueuedMatch,
   type QueuedMatch,
 } from "@/lib/offline-queue";
-
-// Client-side sibling of MatchCard's format — pending cards only ever render
-// on the device that queued them, so device-local time is the right zone.
-const playedAtFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 /**
  * "Pending sync" markers in the logger's local feed (spec "PWA & offline"):
@@ -54,13 +51,15 @@ export function QueuedMatches() {
 }
 
 function QueuedMatchCard({ match }: { match: QueuedMatch }) {
-  const winners = match.names[match.winnerSide];
-  const losers = match.names[match.winnerSide === "A" ? "B" : "A"];
-  const setsText = match.sets
-    ?.map((s) =>
-      match.winnerSide === "A" ? `${s.a}–${s.b}` : `${s.b}–${s.a}`,
-    )
-    .join(", ");
+  const loserSide = match.winnerSide === "A" ? "B" : "A";
+  const players = (side: "A" | "B") =>
+    match.sides[side].map((playerId, index) => ({
+      playerId,
+      name: match.names[side][index],
+    }));
+  const winners = players(match.winnerSide);
+  const losers = players(loserSide);
+  const sets = setScores(match.sets, match.winnerSide);
 
   // A refusal that retrying can't fix is the only one that becomes the user's
   // problem to resolve (decision 26). "Waiting for a connection" and "the
@@ -70,41 +69,47 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
   const stuck = isPermanentRefusal(match.syncCode);
 
   return (
+    // The provisional variants of the feed card: same rows, same type, but a
+    // dashed frame and a status badge instead of rating deltas — the server
+    // hasn't scored these yet, so there are no deltas to show.
     <article
-      className={`border border-dashed px-3.5 py-3 ${
-        stuck ? "border-destructive-border" : "border-accent"
+      className={`flex flex-col gap-[11px] border border-dashed px-4 py-[15px] ${
+        stuck ? "border-primary" : "border-accent"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-lg font-semibold uppercase">
-          {winners.join(" & ")}
-          <span className="font-medium text-muted-foreground lowercase">
-            {" "}
-            def.{" "}
-          </span>
-          <span className="text-muted-foreground">{losers.join(" & ")}</span>
-        </p>
-        <Badge variant={stuck ? "retired" : "pending"}>
+        <PlayedAt at={new Date(match.playedAt)} />
+        <Badge variant={stuck ? "blocked" : "pending"}>
           {stuck ? "Can't sync" : "Pending sync"}
         </Badge>
       </div>
-      <p className="mt-1 font-mono text-xs font-medium text-muted-foreground">
-        {playedAtFormat.format(new Date(match.playedAt))}
-        {setsText && <> · {setsText}</>} · logged by {match.ownerPlayerName}
-      </p>
 
-      {match.syncError && !stuck && (
-        <p className="mt-2 text-sm font-semibold text-muted-foreground">
-          {match.syncError} It stays on this device and syncs by itself.
+      <MatchHeadline
+        winners={<MatchPlayerNames players={winners} />}
+        losers={<MatchPlayerNames players={losers} />}
+      />
+
+      {sets && <SetsRow sets={sets} />}
+
+      {!stuck && (
+        <p className="border-t pt-2.5 text-xs font-medium tracking-[0.5px] text-muted-foreground">
+          {match.syncError
+            ? `${match.syncError} It stays on this device and syncs by itself.`
+            : "Rating pending — scored when this syncs. Only you can see it."}
         </p>
       )}
 
       {stuck && (
-        <div className="mt-2.5 space-y-2.5">
-          <Alert variant="destructive">{match.syncError}</Alert>
+        <>
+          <p className="border-b border-destructive-border pb-2.5 text-[13px] leading-[1.35] font-medium tracking-[0.3px] text-destructive">
+            {match.syncError}
+          </p>
           <ConfirmDialog
             trigger={
-              <Button variant="destructive" size="xs">
+              <Button
+                variant="destructive"
+                className="w-fit font-sans text-xs tracking-[2px]"
+              >
                 Discard
               </Button>
             }
@@ -113,7 +118,7 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
             confirmLabel="Discard"
             onConfirm={() => removeQueuedMatch(match.id)}
           />
-        </div>
+        </>
       )}
     </article>
   );

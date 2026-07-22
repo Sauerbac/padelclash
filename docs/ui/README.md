@@ -26,6 +26,12 @@ spacing, borders, or component styling as design requirements.
   appears on Player Detail and Edit Match, because those routes live inside the
   same route group. Join and Admin are outside that group and do not show the
   tab bar.
+- The bar’s geometry never changes between routes (spec decision 68). Every
+  text tab reserves the active red band as a transparent top border, so
+  switching sections changes colour only — including on Log Match, where
+  neither text tab is active. The bar also carries a short upward shadow to
+  separate it from scrolling content; it is knowingly the one soft shadow in an
+  otherwise flat theme, kept tight so it reads as a lip rather than a glow.
 - Main tab content is a single centered column with a constrained maximum
   width. Each screen starts with a page heading and then stacks its content
   vertically. On larger screens the column remains narrow rather than becoming

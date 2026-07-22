@@ -1,20 +1,25 @@
 import { DeltaBadge } from "@/components/delta-badge";
 import { MatchCardActions } from "@/components/match-card-actions";
-import { PlayerLink } from "@/components/player-link";
+import {
+  MatchHeadline,
+  MatchPlayerNames,
+  PlayedAt,
+  SetsRow,
+  setScores,
+} from "@/components/match-card-parts";
 import type { FeedMatch } from "@/services/matches";
 
-// Server-rendered; formats in the server's timezone, which is fine for one
-// circle in one place.
-const playedAtFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 /**
- * A feed card (design "MatchCard"): winners bright, losers muted, mono meta
- * line, rating-delta chips winners-first.
+ * A feed card (design "MatchCard"): a mono timestamp, the winners-over-losers
+ * headline in display type, the set scores on their own row, and the rating
+ * deltas winners-first.
+ *
+ * Height varies with content by design (decision 67) — a doubles match with
+ * three sets is taller than a scoreless singles, and short cards are not
+ * padded to match.
+ *
+ * Server-rendered; formats in the server's timezone, which is fine for one
+ * circle in one place.
  */
 export function MatchCard({
   match,
@@ -37,44 +42,35 @@ export function MatchCard({
   const losers = match.participants.filter(
     (p) => p.side !== match.winnerSide,
   );
-  const names = (side: typeof winners) =>
-    side.map((p, i) => (
-      <span key={p.playerId}>
-        {i > 0 && <span className="text-muted-foreground"> & </span>}
-        <PlayerLink playerId={p.playerId}>{p.name}</PlayerLink>
-      </span>
-    ));
-
-  // Set scores read winner-first, matching the names next to them.
-  const setsText = match.sets
-    ?.map((s) => (match.winnerSide === "A" ? `${s.a}–${s.b}` : `${s.b}–${s.a}`))
-    .join(", ");
+  const sets = setScores(match.sets, match.winnerSide);
 
   return (
-    <article className="border px-3.5 py-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-lg font-semibold uppercase">
-          {names(winners)}
-          <span className="font-medium text-muted-foreground lowercase">
-            {" "}
-            def.{" "}
-          </span>
-          <span className="text-muted-foreground">{names(losers)}</span>
-        </p>
+    <article className="flex flex-col gap-[11px] border px-4 py-[15px]">
+      <div className="flex items-center justify-between gap-2">
+        <PlayedAt at={match.playedAt} />
         {canModify && <MatchCardActions matchId={match.id} />}
       </div>
-      <p className="mt-1 font-mono text-xs font-medium text-muted-foreground">
-        {playedAtFormat.format(match.playedAt)}
-        {setsText && <> · {setsText}</>}
-        {showLogger && <> · logged by {match.loggedByName}</>}
-      </p>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
+
+      <MatchHeadline
+        winners={<MatchPlayerNames players={winners} />}
+        losers={<MatchPlayerNames players={losers} />}
+      />
+
+      {sets && <SetsRow sets={sets} />}
+
+      <div className="flex flex-wrap gap-1.5">
         {[...winners, ...losers].map((p) => (
           <DeltaBadge key={p.playerId} delta={p.delta}>
             {p.name}{" "}
           </DeltaBadge>
         ))}
       </div>
+
+      {showLogger && (
+        <p className="border-t pt-2.5 font-mono text-[11px] font-medium tracking-[0.5px] text-muted-foreground uppercase">
+          Logged by <span className="text-accent">{match.loggedByName}</span>
+        </p>
+      )}
     </article>
   );
 }

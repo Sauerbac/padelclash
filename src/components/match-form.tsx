@@ -420,6 +420,17 @@ export function MatchForm({
         <label htmlFor="played-at" className="section-label shrink-0">
           Played at
         </label>
+        {/* Always visible: the common case is logging courtside right after
+            the match, and a conditional shortcut is one you have to hunt for. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          onClick={() => setPlayedAt(nowLocal())}
+          className="ml-auto w-fit px-0 text-sm text-accent hover:text-foreground"
+        >
+          Now
+        </Button>
         <Input
           id="played-at"
           type="datetime-local"

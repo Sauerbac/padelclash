@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { canModifyMatch } from "@/domain/edit-rights";
 import { STARTING_RATING } from "@/domain/rating/engine";
-import { BackButton } from "@/components/back-button";
 import { MatchCard } from "@/components/match-card";
 import { RatingChart } from "@/components/rating-chart";
 import { RecordTable } from "@/components/record-table";
@@ -49,8 +48,6 @@ export default async function PlayerDetailPage({
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-5 pt-5 pb-10">
-      <BackButton />
-
       <header>
         <p className="kicker">Player profile</p>
         <div className="flex items-baseline gap-3">

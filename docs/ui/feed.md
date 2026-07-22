@@ -7,6 +7,9 @@
 - Main implementation: `src/app/(tabs)/page.tsx`
 - Main reusable UI: `src/components/match-card.tsx`,
   `src/components/queued-matches.tsx`, `src/components/name-picker.tsx`
+- Shared card internals (headline, timestamp, set-score row) live in
+  `src/components/match-card-parts.tsx`, so the synced and queued cards cannot
+  drift apart visually.
 
 ## Purpose
 
@@ -61,22 +64,32 @@ but this state does not provide a way to identify the Logger.
 
 ## Synced match card
 
-Each card represents one completed match. It contains:
+Each card represents one completed match, laid out as a stack of distinct rows
+(spec decision 67). Top to bottom:
 
-- The winning side first, then the literal relationship “def.”, then the
-  losing side.
-- Each player name is a link to `/players/:id`.
-- Doubles sides join player names with `&`; singles sides contain one name.
-- A metadata line with the played date and time, formatted as day, abbreviated
-  month, and 24-hour time. If set scores exist, append them in the same line.
-  Scores are shown winner-first, regardless of whether the winner was Side A or
-  Side B. Example: `12 Jul, 10:43 · 6–4, 6–3`.
-- One rating-delta badge for every participant. The badges are ordered winners
-  first and losers second, and include the player name plus a signed rounded
-  delta, such as `Simon +15` or `Casey −15`.
+1. **Timestamp row.** The played date and time in mono, formatted as day,
+   abbreviated month, and 24-hour time — `22 Jul, 19:30`. Edit/delete actions
+   sit at the right of this row when the viewer has them.
+2. **Headline.** The winning side in display type at full brightness, the
+   literal relationship “def.” on its own line in ember red, then the losing
+   side one size down and muted. Each player name is a link to `/players/:id`;
+   doubles sides join names with `&`, singles sides contain one name.
+3. **Set scores row**, when scores were recorded. A `SETS` label followed by
+   one bordered box per set. Scores read winner-first regardless of whether the
+   winner was Side A or Side B. Absent entirely for a Simple Result.
+4. **Rating deltas.** One badge per participant, ordered winners first and
+   losers second, each carrying the player name plus a signed rounded delta,
+   such as `Simon +15` or `Casey −15`.
+5. **Logged-by row**, admin viewers only (spec decision 53). Separated by a
+   rule: `LOGGED BY <name>`, the name in gold.
 
-The match card does not show absolute ratings, a logged-by label, or an
-expand/collapse control.
+Set scores get their own row rather than trailing the timestamp: they are the
+match result, not metadata about it. Card heights vary with content — a doubles
+match with three sets is taller than a scoreless singles, and short cards are
+not padded to match (spec decision 67).
+
+The match card does not show absolute ratings, avatars, match duration,
+location, or an expand/collapse control.
 
 ## Edit and delete actions
 
@@ -96,24 +109,33 @@ window or when the viewer is the admin. Other viewers see no action area.
 ## Offline queued match cards
 
 When a new match is logged without connectivity, it is stored locally and
-rendered above the synced feed on that device. A queued card contains:
+rendered above the synced feed on that device. A queued card reuses the synced
+card’s rows and type — timestamp, headline, set scores — so it reads as the
+same component in a provisional state, and differs only in that it:
 
-- The same winner-versus-loser summary as a synced card.
-- The local played date/time and optional winner-first set scores.
-- A `Pending sync` status marker.
+- Is framed with a dashed border instead of a solid one.
+- Carries a `Pending sync` status badge in the timestamp row, gold on dark.
+- Has **no rating-delta row**, because the server has not replayed the match
+  yet. In its place a closing line reads `Rating pending — scored when this
+  syncs. Only you can see it.`, or the last transient sync error when there is
+  one.
 
-Queued matches do not have rating deltas because the server has not replayed
-the match yet. They are synced automatically when the app opens or connectivity
-returns. The queue processes oldest first, while the feed eventually places a
-late-arriving match according to its played time.
+They are synced automatically when the app opens or connectivity returns. The
+queue processes oldest first, while the feed eventually places a late-arriving
+match according to its played time.
 
-If the server rejects a queued match for a non-connectivity reason, keep the
-card in place and show:
+If the server rejects a queued match for a reason that retrying cannot fix, the
+card stays in place and switches to the blocked state:
 
-- An inline destructive error beginning with `Couldn’t sync:` and the server
-  reason.
-- An explicit `Discard` action guarded by a confirmation. Discard permanently
+- The dashed frame and the status badge turn ember red, the badge reading
+  `Can’t sync`.
+- The server’s reason renders as destructive-toned text above a rule.
+- An explicit `Discard` action, guarded by a confirmation. Discard permanently
   removes the queued local match; it must never happen silently.
+
+Transient refusals (no connection, server busy) get the status line only, not
+the Discard action — offering it for those invites people to delete matches
+that were about to sync fine (spec decision 26).
 
 ## Empty state
 

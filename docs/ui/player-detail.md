@@ -15,14 +15,13 @@ records, and personal match history.
 
 ## Current structural layout
 
-1. Back control.
-2. Player heading and status badges.
-3. Three-stat summary card.
-4. Rating-over-time chart card when the player has matches.
-5. Head-to-head table when there are opponents.
-6. Doubles partners table when there are partners.
-7. `Matches` section with the player’s match cards newest first.
-8. The shared bottom tab bar, because this route is inside the tabs layout.
+1. Player heading and status badges.
+2. Three-stat summary card.
+3. Rating-over-time chart card when the player has matches.
+4. Head-to-head table when there are opponents.
+5. Doubles partners table when there are partners.
+6. `Matches` section with the player’s match cards newest first.
+7. The shared bottom tab bar, because this route is inside the tabs layout.
 
 The view is a single long vertical page. The stats and relationship data are
 separate sections; there are no tabs or collapsible panels inside Player
@@ -30,9 +29,12 @@ Detail.
 
 ## Back navigation
 
-The screen carries its own `Back` control with a left-chevron affordance because
-the installed PWA may not have browser chrome. If browser history has a previous
-entry, it goes back. If the page was opened directly, it goes to `/`.
+The screen carries **no** back control (spec decision 66). The tab bar is
+present on every screen under the tab shell, and iOS standalone PWAs have
+supported the edge-swipe back gesture since iOS 13. The accepted cost is that
+returning via the Feed tab resets scroll position, so a player opened from deep
+in the feed comes back to the top. Re-adding a back control is a deliberate
+reversal, not an oversight to correct.
 
 ## Header and status
 
@@ -69,8 +71,10 @@ The current implementation uses an interactive inline chart with:
 
 - Rating gridlines and labels selected to cover the series.
 - A line and lightly filled area.
-- A current/last-rating label.
 - Start and last-match labels beneath the plot.
+- An ember-red dot marking the endpoint. It carries **no** rating label: the
+  same value already renders in the section header and in the stat triplet, so
+  a third copy was redundant.
 - Pointer tracking to select the nearest point.
 - A focusable hit target for every point for keyboard/touch access.
 - A tooltip showing the rounded rating, signed delta for that match, and date

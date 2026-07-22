@@ -15,16 +15,23 @@ export function TabBar() {
   const logActive = pathname.startsWith("/log");
   const rankingsActive = pathname.startsWith("/leaderboard");
 
+  // Every text tab reserves the active red band as a transparent border, so
+  // switching sections changes colour only — never geometry (decision 68).
+  // Without this the bar was 1px shorter on Log Match, where neither text tab
+  // is active.
   const textTab = (active: boolean) =>
     cn(
-      "flex-1 pt-4 pb-3.5 text-center text-xs font-semibold tracking-[2px] uppercase",
+      "-mt-px flex-1 border-t-2 pt-4 pb-3.5 text-center text-xs font-semibold tracking-[2px] uppercase",
       active
-        ? "-mt-px border-t-2 border-primary font-bold text-foreground"
-        : "text-muted-foreground hover:text-foreground",
+        ? "border-primary font-bold text-foreground"
+        : "border-transparent text-muted-foreground hover:text-foreground",
     );
 
   return (
-    <nav className="sticky bottom-0 z-40 border-t bg-plate pb-[env(safe-area-inset-bottom)]">
+    // The upward shadow is knowingly the one soft shadow in a flat theme
+    // (decision 68) — kept tight so it reads as a lip lifting the bar off the
+    // feed, not as a glow.
+    <nav className="sticky bottom-0 z-40 border-t bg-plate pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_14px_-6px_rgba(0,0,0,0.85)]">
       <div className="mx-auto flex w-full max-w-lg">
         <Link
           href="/"

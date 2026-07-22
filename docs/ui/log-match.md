@@ -101,6 +101,11 @@ new matches it defaults to the current device-local date and time. In a browser
 or mobile OS this is the calendar/date-and-time picker affordance; there is no
 separate calendar screen or date-range calendar in the current app.
 
+Between the label and the input sits a `Now` button that resets the value to
+the current device-local moment. It is always visible, never conditional: the
+common case is logging courtside right after the match, and a shortcut that
+appears only sometimes is one you have to hunt for.
+
 When editing, prefill the existing match’s played timestamp, converted to the
 device’s local time for the control. The saved value is sent back as an ISO
 timestamp.

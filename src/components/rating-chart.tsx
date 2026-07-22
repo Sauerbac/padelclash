@@ -124,13 +124,6 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
           />
         ))}
 
-        <span
-          className="absolute -translate-y-1/2 pl-2 font-mono text-xs font-semibold text-accent"
-          style={{ left: `${last.x}%`, top: `${last.y}%` }}
-        >
-          {Math.round(last.rating)}
-        </span>
-
         {/* Keyboard/touch hit targets, one per point, bigger than the marks. */}
         {coords.map((c, i) => (
           <button

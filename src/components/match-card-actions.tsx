@@ -22,9 +22,19 @@ export function MatchCardActions({ matchId }: { matchId: string }) {
     });
   }
 
+  // 40px targets per the card design, pulled back into the meta row with a
+  // negative margin so they don't set the row's height.
+  const target = "size-10 -my-1.5 [&_svg]:size-4";
+
   return (
-    <div className="flex gap-1">
-      <Button asChild variant="ghost" size="icon-xs" aria-label="Edit match">
+    <div className="-mr-1.5 flex gap-0.5">
+      <Button
+        asChild
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Edit match"
+        className={target}
+      >
         <Link href={`/matches/${matchId}/edit`}>
           <Pencil aria-hidden />
         </Link>
@@ -36,6 +46,7 @@ export function MatchCardActions({ matchId }: { matchId: string }) {
             size="icon-xs"
             aria-label="Delete match"
             disabled={pending}
+            className={target}
           >
             <X aria-hidden />
           </Button>

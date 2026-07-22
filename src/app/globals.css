@@ -27,6 +27,9 @@
   --destructive: #e06a52;
   --destructive-border: #7a3327;
   --win: #3fae5a;
+  /* Third place on the rankings stand. #1 keeps the gold accent and #2 stays
+     plain muted, so this is the one medal colour the theme carries. */
+  --podium-bronze: #b07a3a;
   --hairline: #2c2318;
   --plate: #100c09;
   --border: #4a3d2e;
@@ -60,6 +63,7 @@
   --color-destructive: var(--destructive);
   --color-destructive-border: var(--destructive-border);
   --color-win: var(--win);
+  --color-podium-bronze: var(--podium-bronze);
   --color-hairline: var(--hairline);
   --color-plate: var(--plate);
   --color-border: var(--border);
