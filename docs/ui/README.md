@@ -29,9 +29,10 @@ spacing, borders, or component styling as design requirements.
 - The bar’s geometry never changes between routes (spec decision 68). Every
   text tab reserves the active red band as a transparent top border, so
   switching sections changes colour only — including on Log Match, where
-  neither text tab is active. The bar also carries a short upward shadow to
-  separate it from scrolling content; it is knowingly the one soft shadow in an
-  otherwise flat theme, kept tight so it reads as a lip rather than a glow.
+  neither text tab is active. One short upward shadow follows the combined
+  silhouette of the bar and raised centre Log plate, rising around the plate
+  before rejoining the bar. It is knowingly the one soft shadow treatment in
+  an otherwise flat theme, kept tight so it reads as a lip rather than a glow.
 - Main tab content is a single centered column with a constrained maximum
   width. Each screen starts with a page heading and then stacks its content
   vertically. On larger screens the column remains narrow rather than becoming
@@ -65,4 +66,3 @@ spacing, borders, or component styling as design requirements.
   and do not hold a leaderboard rank.
 - The Logger may edit or delete their own match for 24 hours after it was
   logged. The admin may edit or delete any match at any age.
-

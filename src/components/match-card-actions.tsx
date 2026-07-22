@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTransition } from "react";
-import { Pencil, X } from "lucide-react";
+import { CircleX, Pencil } from "lucide-react";
 import { deleteMatchAction } from "@/app/actions/matches";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -24,7 +24,7 @@ export function MatchCardActions({ matchId }: { matchId: string }) {
 
   // 40px targets per the card design, pulled back into the meta row with a
   // negative margin so they don't set the row's height.
-  const target = "size-10 -my-1.5 [&_svg]:size-4";
+  const target = "size-10 -my-1.5";
 
   return (
     <div className="-mr-1.5 flex gap-0.5">
@@ -36,7 +36,7 @@ export function MatchCardActions({ matchId }: { matchId: string }) {
         className={target}
       >
         <Link href={`/matches/${matchId}/edit`}>
-          <Pencil aria-hidden />
+          <Pencil aria-hidden className="size-4" />
         </Link>
       </Button>
       <ConfirmDialog
@@ -48,7 +48,7 @@ export function MatchCardActions({ matchId }: { matchId: string }) {
             disabled={pending}
             className={target}
           >
-            <X aria-hidden />
+            <CircleX aria-hidden className="size-4" />
           </Button>
         }
         title="Delete this match?"

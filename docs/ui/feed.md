@@ -70,12 +70,12 @@ Each card represents one completed match, laid out as a stack of distinct rows
 1. **Timestamp row.** The played date and time in mono, formatted as day,
    abbreviated month, and 24-hour time — `22 Jul, 19:30`. Edit/delete actions
    sit at the right of this row when the viewer has them.
-2. **Headline.** The winning side in display type at full brightness, the
-   literal relationship “def.” on its own line in ember red, then the losing
-   side one size down and muted. Each player name is a link to `/players/:id`;
-   doubles sides join names with `&`, singles sides contain one name.
-3. **Set scores row**, when scores were recorded. A `SETS` label followed by
-   one bordered box per set. Scores read winner-first regardless of whether the
+2. **Headline.** In singles, winner, ember-red `def.`, and muted loser share
+   one baseline and one row. In doubles, the winning side and `def.` share the
+   first baseline, while the muted losing side occupies the second row. Each
+   player name is a link to `/players/:id`; doubles sides join names with `&`.
+3. **Set scores row**, when scores were recorded. One bordered box per set,
+   with no redundant label. Scores read winner-first regardless of whether the
    winner was Side A or Side B. Absent entirely for a Simple Result.
 4. **Rating deltas.** One badge per participant, ordered winners first and
    losers second, each carrying the player name plus a signed rounded delta,
@@ -96,7 +96,8 @@ location, or an expand/collapse control.
 If the current viewer has edit rights, the card’s top-right action area shows:
 
 - An edit icon button that navigates to `/matches/:id/edit`.
-- A delete icon button.
+- A circled-X delete icon button, with the same optical size and touch target
+  as Edit.
 
 Delete requires a confirmation explaining that ratings will be recomputed as if
 the match had never existed. While deletion is pending, the action is

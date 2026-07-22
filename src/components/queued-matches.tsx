@@ -87,6 +87,7 @@ function QueuedMatchCard({ match }: { match: QueuedMatch }) {
       <MatchHeadline
         winners={<MatchPlayerNames players={winners} />}
         losers={<MatchPlayerNames players={losers} />}
+        singles={winners.length === 1 && losers.length === 1}
       />
 
       {sets && <SetsRow sets={sets} />}

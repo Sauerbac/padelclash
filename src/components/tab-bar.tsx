@@ -28,10 +28,10 @@ export function TabBar() {
     );
 
   return (
-    // The upward shadow is knowingly the one soft shadow in a flat theme
-    // (decision 68) — kept tight so it reads as a lip lifting the bar off the
-    // feed, not as a glow.
-    <nav className="sticky bottom-0 z-40 border-t bg-plate pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_14px_-6px_rgba(0,0,0,0.85)]">
+    // One drop shadow follows the silhouette of both the bar and its raised
+    // Log plate, so the contour rises around the centre instead of becoming
+    // two overlapping rectangular shadows (decision 72).
+    <nav className="sticky bottom-0 z-40 border-t bg-plate pb-[env(safe-area-inset-bottom)] drop-shadow-[0_-5px_7px_rgba(0,0,0,0.9)]">
       <div className="mx-auto flex w-full max-w-lg">
         <Link
           href="/"

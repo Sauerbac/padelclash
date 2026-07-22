@@ -39,21 +39,34 @@ export function PlayedAt({ at }: { at: Date }) {
 export function MatchHeadline({
   winners,
   losers,
+  singles,
 }: {
   winners: React.ReactNode;
   losers: React.ReactNode;
+  singles: boolean;
 }) {
   return (
     <div>
-      <div className="font-display text-[25px] leading-[1.02] tracking-[0.5px] uppercase">
+      <div
+        className={`font-display leading-[1.02] tracking-[0.5px] uppercase ${
+          singles ? "text-[clamp(18px,6vw,25px)] whitespace-nowrap" : "text-[25px]"
+        }`}
+      >
         {winners}
+        <span className="ml-2 font-mono text-[10px] font-semibold tracking-[2px] text-primary uppercase">
+          def.
+        </span>
+        {singles && (
+          <span className="ml-2 text-[clamp(16px,5vw,20px)] text-muted-foreground">
+            {losers}
+          </span>
+        )}
       </div>
-      <div className="my-[5px] font-mono text-[10px] font-semibold tracking-[2px] text-primary uppercase">
-        def.
-      </div>
-      <div className="font-display text-[20px] leading-[1.02] tracking-[0.5px] text-muted-foreground uppercase">
-        {losers}
-      </div>
+      {!singles && (
+        <div className="mt-[5px] font-display text-[20px] leading-[1.02] tracking-[0.5px] text-muted-foreground uppercase">
+          {losers}
+        </div>
+      )}
     </div>
   );
 }
@@ -74,25 +87,20 @@ export function MatchPlayerNames({
 
 /**
  * The set scores on their own row (decision 67) — they are the match result,
- * not metadata about it. Winner-first, one box per set. Absent entirely when
- * the logger skipped them.
+ * not metadata about it. Winner-first, one self-explanatory box per set;
+ * absent entirely when the logger skipped them.
  */
 export function SetsRow({ sets }: { sets: string[] }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-[9px] font-semibold tracking-[2px] text-muted-foreground uppercase">
-        Sets
-      </span>
-      <div className="flex flex-wrap gap-1.5">
-        {sets.map((score, i) => (
-          <span
-            key={i}
-            className="border px-2 py-[3px] font-mono text-[13px] font-semibold"
-          >
-            {score}
-          </span>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-1.5">
+      {sets.map((score, i) => (
+        <span
+          key={i}
+          className="border px-2 py-[3px] font-mono text-[13px] font-semibold"
+        >
+          {score}
+        </span>
+      ))}
     </div>
   );
 }
