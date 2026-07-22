@@ -39,34 +39,21 @@ export function PlayedAt({ at }: { at: Date }) {
 export function MatchHeadline({
   winners,
   losers,
-  singles,
 }: {
   winners: React.ReactNode;
   losers: React.ReactNode;
-  singles: boolean;
 }) {
   return (
     <div>
-      <div
-        className={`font-display leading-[1.02] tracking-[0.5px] uppercase ${
-          singles ? "text-[clamp(18px,6vw,25px)] whitespace-nowrap" : "text-[25px]"
-        }`}
-      >
+      <div className="font-display text-[25px] leading-[1.02] tracking-[0.5px] uppercase">
         {winners}
         <span className="ml-2 font-mono text-[10px] font-semibold tracking-[2px] text-primary uppercase">
           def.
         </span>
-        {singles && (
-          <span className="ml-2 text-[clamp(16px,5vw,20px)] text-muted-foreground">
-            {losers}
-          </span>
-        )}
       </div>
-      {!singles && (
-        <div className="mt-[5px] font-display text-[20px] leading-[1.02] tracking-[0.5px] text-muted-foreground uppercase">
-          {losers}
-        </div>
-      )}
+      <div className="mt-[5px] font-display text-[20px] leading-[1.02] tracking-[0.5px] text-muted-foreground uppercase">
+        {losers}
+      </div>
     </div>
   );
 }

@@ -70,10 +70,10 @@ Each card represents one completed match, laid out as a stack of distinct rows
 1. **Timestamp row.** The played date and time in mono, formatted as day,
    abbreviated month, and 24-hour time — `22 Jul, 19:30`. Edit/delete actions
    sit at the right of this row when the viewer has them.
-2. **Headline.** In singles, winner, ember-red `def.`, and muted loser share
-   one baseline and one row. In doubles, the winning side and `def.` share the
-   first baseline, while the muted losing side occupies the second row. Each
-   player name is a link to `/players/:id`; doubles sides join names with `&`.
+2. **Headline.** In both singles and doubles, the winning side and ember-red
+   `def.` share the first baseline, while the muted losing side occupies the
+   second row. Each player name is a link to `/players/:id`; doubles sides join
+   names with `&`.
 3. **Set scores row**, when scores were recorded. One bordered box per set,
    with no redundant label. Scores read winner-first regardless of whether the
    winner was Side A or Side B. Absent entirely for a Simple Result.
