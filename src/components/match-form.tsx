@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { enqueueMatch } from "@/lib/offline-queue";
+import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
 

@@ -42,3 +42,5 @@ next-env.d.ts
 
 # harness-generated mirror of .claude/skills — the tracked copy is canonical
 .agents/
+# Generated from the Next build ID by `npm run build`.
+/public/sw.js

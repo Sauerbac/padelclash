@@ -1,0 +1,17 @@
+# Development-only conveniences. Coolify deploys docker-compose.yml itself.
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  app:
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/padelclash
+      # The image runs NODE_ENV=production, so its smoke-test password must
+      # satisfy the production length rule. `npm run dev` still uses
+      # ADMIN_PASSWORD=change-me from .env.
+      ADMIN_PASSWORD: ${COMPOSE_ADMIN_PASSWORD:-local-development-only}

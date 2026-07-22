@@ -32,9 +32,12 @@ function sessionSecret(): string | null {
 }
 
 export async function isAdmin(): Promise<boolean> {
+  // Read request state before consulting runtime configuration. If a secret-free
+  // Docker build returns early first, Next can incorrectly prerender /admin as
+  // a permanently signed-out static page.
+  const store = await cookies();
   const secret = sessionSecret();
   if (!secret) return false;
-  const store = await cookies();
   const token = store.get(ADMIN_COOKIE)?.value;
   if (!token) return false;
   return verifyAdminSessionToken(secret, token, new Date());

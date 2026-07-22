@@ -1,22 +1,15 @@
 /**
- * Dropping this installation's cached content (spec decision 52).
+ * Dropping legacy cached private pages after revocation.
  *
- * Navigations are cached network-first by public/sw.js, so a member's Feed,
- * Rankings and Player Detail responses sit in the Cache API for offline use.
- * The moment we learn this installation's credential no longer resolves, that
- * cached content is someone else's data on a device that is no longer entitled
- * to it.
+ * Current workers never cache private navigations. This cleanup remains for
+ * installations upgrading from the old worker, whose `padelclash-pages-*`
+ * caches may contain Feed, Leaderboard, or Player Detail HTML.
  *
  * Two deliberate choices:
  *
- * - **Everything goes, not just the page caches.** Naming the private cache
- *   here would duplicate a constant that lives in public/sw.js — a plain
- *   static file outside the module graph, so it cannot export one. A rename on
- *   either side would silently stop the purge from matching, and the failure
- *   mode is a private-data leak that nothing would catch. What remains is the
- *   static shell: build-hashed chunks, fonts, the logo — all public, all
- *   re-fetchable. Throwing them away costs one cold load and removes the
- *   coupling entirely.
+ * - Only the retired `padelclash-pages-*` namespace is private. The generated
+ *   `padelclash-shell-*` cache contains the static offline Match-entry shell
+ *   and must survive cleanup so an unbound device can still open safely.
  * - **Done from the window, not by messaging the worker.** The Cache API is
  *   available to both, and a purge that depended on a live, actively
  *   controlling service worker would silently no-op in exactly the situations
@@ -30,7 +23,9 @@ export async function dropPrivatePageCaches(): Promise<boolean> {
   if (typeof caches === "undefined") return true;
   try {
     const keys = await caches.keys();
-    await Promise.all(keys.map((key) => caches.delete(key)));
+    await Promise.all(
+      keys.filter(isPrivatePageCache).map((key) => caches.delete(key)),
+    );
     return true;
   } catch {
     // Never break the revocation path over this: the server still refuses
@@ -38,4 +33,8 @@ export async function dropPrivatePageCaches(): Promise<boolean> {
     // caller retries.
     return false;
   }
+}
+
+export function isPrivatePageCache(key: string): boolean {
+  return key.startsWith("padelclash-pages-");
 }

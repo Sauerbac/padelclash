@@ -17,7 +17,7 @@ import {
   listQueuedMatches,
   removeQueuedMatch,
   type QueuedMatch,
-} from "@/lib/offline-queue";
+} from "@/services/offline/queue";
 
 /**
  * "Pending sync" markers in the logger's local feed (spec "PWA & offline"):

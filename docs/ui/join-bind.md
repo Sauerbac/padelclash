@@ -3,15 +3,15 @@
 ## Identity
 
 - Route: `/join/:token`
-- Entry point: personal link created by the admin and shared with a player
+- Entry point: Personal or General Onboarding Link created by Admin
 - Main implementation: `src/app/join/[token]/page.tsx`,
-  `src/components/join-landing.tsx`
+  `src/components/join-confirm.tsx`
 
 ## Purpose
 
-Bind the current browser/device to a specific active player. The token in the
-URL identifies the player; there is no player-selection step on a valid join
-link and no password form.
+Create or replace the installation's Device Binding after explicit
+confirmation. A Personal Link identifies one Player. A General Link allows the
+visitor to select a Not Joined Player or create a new Player.
 
 ## Current structural layout
 
@@ -20,26 +20,19 @@ standalone surface: it does not show the main tab bar, feed, or admin controls.
 
 ## Binding lifecycle
 
-The page attempts to bind automatically when it loads. The user does not press
-a “bind” button.
-
-### Binding in progress
-
-- Heading greets the player: `Hi [player name]! 👋`.
-- Body says `Linking this device to you…`.
-- The card has no action button while the request is in progress.
+Opening or previewing a link never mutates state. The page explains that this
+installation cannot switch Players without Admin help and requires an explicit
+confirmation. Confirmation revalidates the invitation, Player, Player Name and
+current installation state atomically.
 
 ### Bound successfully
 
-- Keep the greeting heading.
-- Explain that the device is now assigned to the named player and that matches
-  logged from it will be credited to them.
-- On iOS Safari when the app is not already installed as a standalone PWA,
-  show an install hint explaining the Share button and `Add to Home Screen`.
-- Show a full-width `Open PadelClash` action linking to `/`.
-
-The server writes the long-lived device binding. The client also stores a local
-recovery marker so the binding can be restored after cookie eviction.
+- The server writes the long-lived, HttpOnly Device Binding cookie and stores
+  only its hash in PostgreSQL.
+- A Personal Link is consumed. Any outstanding Personal Link for a Player
+  joined through a General Link is invalidated.
+- The installation opens PadelClash as that Player. No credential or recovery
+  marker is written to localStorage.
 
 ### Binding failed
 
@@ -61,8 +54,10 @@ No binding attempt is made and no tab bar is shown.
 
 ## Token behavior relevant to redesign
 
-- A personal link is reusable and can bind a new or forgetful device.
-- The admin can rotate a token. The old URL then stops working.
-- Rotating a token does not unbind devices that are already bound.
-- Retiring a player revokes their link and removes their active binding.
-
+- Personal Links are single-use, expire after 7 days, and are replaced when
+  Admin issues another.
+- The General Link may onboard several Players during its 12-hour lifetime.
+- A bound installation is redirected away from onboarding without consuming
+  the invitation.
+- Replacing or revoking access and retiring a Player invalidate the active
+  Device Binding according to the source-of-truth spec.

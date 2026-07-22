@@ -14,9 +14,9 @@ spacing, borders, or component styling as design requirements.
 | [Leaderboard](leaderboard.md) | `/leaderboard` | Show active players, ratings, ranks, and W–L records |
 | [Player Detail](player-detail.md) | `/players/:id` | Show one player’s rating, history, head-to-head, and doubles-partner statistics |
 | [Edit Match](edit-match.md) | `/matches/:id/edit` | Correct a previously logged match or explain why it is locked |
-| [Join / Bind Device](join-bind.md) | `/join/:token` | Bind a device to a player through a personal invite link |
+| [Join / Bind Device](join-bind.md) | `/join/:token` | Explicitly join through a Personal or General Onboarding Link |
 | [Admin Login](admin-login.md) | `/admin` when signed out | Authenticate the single administrator |
-| [Admin Panel](admin-panel.md) | `/admin` when signed in | Manage players, join links, retirement, and the name-picker setting |
+| [Admin Panel](admin-panel.md) | `/admin` when signed in | Manage Players, onboarding links, Device Bindings, and retirement |
 
 ## Shared shell and global behavior
 
@@ -41,12 +41,10 @@ spacing, borders, or component styling as design requirements.
   screen. The page heading and the bottom tab bar form the primary shell.
 - Player names are navigation targets wherever they appear in match cards,
   tables, and companion-stat tables. Selecting one opens Player Detail.
-- The device binding is convenience identity. A bound device identifies the
-  Logger for newly logged matches and marks that player as “You”; it is not a
-  permission boundary.
-- A lost binding cookie can be silently restored from a local recovery marker.
-  This happens globally and has no visible screen of its own unless the repair
-  fails and the user remains unbound.
+- The Device Binding is the Player authorization boundary. It identifies the
+  Logger for newly logged Matches and marks that Player as “You”.
+- A lost binding cookie requires Admin-assisted onboarding again; credentials
+  and recovery markers are never stored in localStorage.
 - The app has a service worker for the app shell and an offline write queue.
   Reading the feed, leaderboard, and player statistics still requires the
   server in v1.

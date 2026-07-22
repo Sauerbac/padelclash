@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/generate-service-worker.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
@@ -34,6 +34,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

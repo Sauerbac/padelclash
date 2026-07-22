@@ -10,7 +10,7 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BINDING_CHANGED_EVENT } from "@/lib/offline-queue";
+import { BINDING_CHANGED_EVENT } from "@/services/offline/queue";
 import type { InvitationPreview } from "@/services/onboarding";
 
 /**

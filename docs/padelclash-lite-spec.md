@@ -12,7 +12,8 @@ Decided by Simon in grilling sessions, 2026-07-11.
 
 **One circle, not a platform.** The app *is* the group: one leaderboard, one feed,
 one roster. A padel match tracker for a fixed circle of friends/colleagues —
-log matches, watch the Elo leaderboard move. Installable as a PWA on iOS.
+log matches, watch the Elo leaderboard move. Installable as a PWA on iOS and
+Android.
 
 Guiding principles:
 
@@ -211,8 +212,10 @@ porting; the app just never sets other values).
 
 ## PWA & offline
 
-- Web manifest, icons, `display: standalone`; installable from Safari's share sheet
-  on iOS. Served over HTTPS (Coolify handles certs).
+- Web manifest, icons, `display: standalone`; installable from Safari's share
+  sheet on iOS and through the browser install flow on Android. Served over
+  HTTPS (Coolify handles certs). Installation instructions live in the deployment
+  runbook; v1 does not add a custom in-app install prompt.
 - Service worker caches the **app shell** for instant open.
 - **Offline log queue (v1):** a match logged without a connection is stored locally
   (IndexedDB) and synced when the network returns (on next open / regained
@@ -242,6 +245,13 @@ porting; the app just never sets other values).
 | Email | **none** — Resend dropped |
 | Hosting | Simon's Coolify instance |
 | Language/UI | English, hardcoded — no i18n layer |
+
+Production is one self-contained Coolify Docker Compose resource: one app
+container and one private PostgreSQL container with a named persistent volume.
+There is exactly one steady-state app process. PostgreSQL is reachable only on
+the Compose network and the app is reachable only through Coolify's HTTPS proxy.
+See [the deployment runbook](./coolify-deployment.md) and
+[ADR 0002](./adr/0002-bundle-postgresql-with-the-application.md).
 
 The scaffold, deploy plumbing (Dockerfile, compose, CI), and configs are **rebuilt
 from scratch** on this branch — nothing config-level is inherited from the old app.
@@ -393,10 +403,28 @@ they earned interest during the grilling:
 | # | Decision | Call |
 |---|---|---|
 | 65 | Rankings podium | A Top 3 stand replaces rows 1–3 rather than sitting above a complete table: in a circle of ~8–12 Players a duplicated top three costs a third of the screen to say nothing twice. The table therefore starts at #4, and ranks stay absolute. The stand renders only when three ranked Players exist — below that the plain table stands alone, because a one-Player podium reads as breakage rather than as an early state. Each plinth carries rank, Player Name and Rating but not W–L (three columns don't fit a 360 px phone, and the stand is a trophy, not a data row); #1 keeps the existing gold accent while #2 and #3 get plain borders and shorter plinths, since inventing silver and bronze tokens for one component is out of proportion. The "You" badge moves onto the plinth when the viewer is top three, otherwise it would vanish with the row that carried it |
-| 66 | Player Detail back affordance | Player Detail carries no back control, and `back-button.tsx` is deleted with it. This **reverses** the component's original argument — that an installed iOS PWA has no browser chrome and so each drill-in must supply its own — because the tab bar is present on every screen under the tab shell and iOS standalone PWAs have supported the edge-swipe back gesture since iOS 13. The accepted cost is real and was weighed: returning via the Feed tab resets scroll position, so a Player opened from deep in the feed comes back to the top. Re-adding a back control is a deliberate reversal, not an oversight to correct |
+| 66 | Player Detail back affordance | Player Detail carries no back control, and `back-button.tsx` is deleted with it. This **reverses** the component's original argument — that an installed PWA has no browser chrome and so each drill-in must supply its own — because the tab bar is present on every screen under the tab shell and installed mobile PWAs retain system/browser history navigation: iOS edge-swipe and Android's system Back gesture/button. The accepted cost is real and was weighed: returning via the Feed tab resets scroll position, so a Player opened from deep in the feed comes back to the top. Re-adding a back control is a deliberate reversal, not an oversight to correct |
 | 67 | Feed card rows | Set Scores get their own row instead of trailing the timestamp on the mono meta line — they are the match result, not metadata about it. Card heights are explicitly allowed to vary with content (singles vs doubles, scores vs none); no padding to a uniform height |
 | 68 | Tab bar geometry and separation | The active tab's red band is reserved as a transparent border on inactive tabs so switching sections changes colour only, never layout — on Log Match neither text tab is active and the bar previously changed height. The bar also gains a short upward shadow, knowingly the first soft shadow in a theme that is otherwise flat planes and hard borders; it is kept tight and hugging so it reads as a lip rather than a glow. If the inconsistency grates, the on-theme alternative is a gradient scrim fading content out above the bar |
 | 69 | Podium bronze, and W–L on the plinths | The returned design contradicted decision 65 twice, and both were re-decided with the user. **Bronze is adopted:** #3 gets a `--podium-bronze` token, reversing 65's "no silver/bronze" on the narrow ground that one medal colour is not the pair 65 was rejecting — #2 stays plain muted and #1 keeps the existing gold, so exactly one token was added. The #1 plinth reuses `--secondary` rather than the design's new tint. **W–L is adopted:** 65 excluded it because "three columns don't fit a 360 px phone", but the design renders `rating · W–L` as a single mono line rather than as columns, which dissolves that objection. Measured at 360, 390 and 430 px: zero column overflow, no horizontal page scroll. It stays unless a future name/rating combination breaks the line |
 | 70 | Podium narrow-screen fit | Podium name type scales down fluidly on narrow phones so ordinary long names remain whole; balanced wrapping is only the fallback for names that still cannot fit. Rank numerals must remain visually inside their plinths: #3 is slightly smaller, uses normal line-height, and sits below its bronze rail rather than colliding with it |
 | 71 | Feed result density | Singles and doubles both use two team rows: the winning side and ember-red `def.` share the first baseline, with the muted losing side below. Recorded set values remain a separate result row but carry no `SETS` label because the bordered score values explain themselves |
 | 72 | Raised-nav and action balance | One upward shadow follows the combined silhouette of the nav bar and raised centre Log plate, rising around the plate and rejoining the bar rather than layering two separate shadows. Match-card Edit and Delete retain identical 40 px targets and 16 px icon boxes; Delete uses a circled X so its visible footprint matches the pencil |
+
+## Decision log (2026-07-22, production and mobile PWA)
+
+| # | Decision | Call |
+|---|---|---|
+| 73 | Mobile platforms | PadelClash is an installable mobile PWA for both iOS and Android; production verification covers installed mode on both platforms at common phone widths |
+| 74 | Coolify topology | Production is one Docker Compose resource containing one app container and one PostgreSQL 17 container. PostgreSQL is private, persists in a named volume, and the app is exposed only through Coolify's HTTPS proxy |
+| 75 | Process topology | Production has exactly one steady-state app process. In-process rate limits deliberately do not coordinate across replicas; brief old/new overlap during a compatible deployment is acceptable, but horizontal scaling is not supported |
+| 76 | Release policy | Production deploys are manual after CI passes. Coolify waits for the database-aware health check; stdout/stderr and Coolify health are the initial observability boundary, while external telemetry and fixed resource limits are deferred |
+| 77 | Migration and rollback policy | The container applies committed Drizzle migrations before starting Next. Normal migrations remain compatible with deployment overlap; destructive migrations require a fresh database dump, and application code is never blindly rolled back across a schema change |
+| 78 | Backups | The match log is irreplaceable, so PostgreSQL creates a daily custom-format dump and retains 30 daily generations on the VPS. An encrypted Windows PC catches up every missing dump over SSH/SFTP whenever it is online, retains 90 daily plus 12 monthly generations, never mirrors remote deletion, and warns when its newest copy is older than 7 days. The phone is not a required backup target. The internal Coolify backup path is discovered at deployment rather than hard-coded, and preserving only the Docker volume is not disaster recovery |
+| 79 | Production secrets | Coolify generates and preserves the database password. `ADMIN_PASSWORD` is a runtime-only secret of at least 20 characters, kept in Coolify and a password manager; missing or weaker production configuration fails startup, and changing the admin password deliberately invalidates admin sessions |
+| 80 | Install experience | Keep browser-native installation rather than building a custom prompt: Safari's Add to Home Screen flow on iOS and the browser install flow on Android are documented and verified after deployment |
+| 81 | Offline launch contract | After one successful online launch while joined, the installed PWA must reopen offline and allow a Match to be queued on iOS and Android. Feed, Leaderboard and Player Detail remain online-only; the service-worker design must not turn cached private navigations into an accidental offline-read feature |
+| 82 | Service-worker privacy and updates | Do not blindly pre-cache `/`, because it contains credential-dependent server output. Use an explicit versioned shell/offline strategy, exclude API/Admin/Onboarding surfaces, clear private caches after revocation, and verify that a deployment cannot strand cached HTML with missing Next.js chunks |
+| 83 | Web hardening | The private installation is `noindex`; invitation-bearing pages send no referrer. Hide the framework header and add low-complexity type-sniffing and frame protections; a strict CSP is deferred until it can be tested with Next's generated scripts |
+| 84 | Build assets | Keep generated PNG manifest icons and the existing build-time Google Font downloads. Coolify and CI therefore need outbound build access; all resulting font assets are self-hosted by the built application at runtime |
+| 85 | Offline log snapshot | Reliable cold offline logging necessarily persists a minimal private snapshot: the bound Player identity plus the active roster needed by the Match form. It contains no Feed, ratings or Player Detail data, is refreshed after successful online reads, is subject to the same originating-Player sync checks as the queue, and is cleared when revocation is observed |

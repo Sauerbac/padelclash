@@ -26,6 +26,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "PadelClash",
   description: "Padel match tracker for the circle",
+  robots: { index: false, follow: false },
   appleWebApp: {
     capable: true,
     title: "PadelClash",

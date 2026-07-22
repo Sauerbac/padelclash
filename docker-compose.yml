@@ -1,38 +1,35 @@
-# Local development: `docker compose up -d db` + `npm run dev`.
-# Full production-image smoke test: `docker compose up --build`.
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${SERVICE_PASSWORD_POSTGRES}
       POSTGRES_DB: padelclash
-    ports:
-      # Host port is overridable for machines where 5432 is already taken
-      # (set POSTGRES_HOST_PORT in .env and match DATABASE_URL).
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d padelclash"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d padelclash || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 10s
 
   app:
     build: .
-    # Boot is fail-fast (migrations run in instrumentation); retry transient failures.
-    restart: on-failure
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/padelclash
-      # No default on purpose: a deploy that forgets the var must fail loudly,
-      # not come up with a well-known admin password. Local runs get it from .env.
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set (see .env.example)}
+      DATABASE_URL: postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@db:5432/padelclash
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 volumes:
   db-data:

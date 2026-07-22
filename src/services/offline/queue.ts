@@ -2,7 +2,8 @@ import type { LogMatchPayload } from "@/app/actions/matches";
 import {
   isPermanentRefusal,
   type MatchSyncRefusal,
-} from "@/domain/sync-policy";
+} from "../../domain/sync-policy";
+import { QUEUED_MATCHES_STORE, withOfflineStore } from "./db";
 
 /**
  * Offline log queue (spec "PWA & offline"): a match logged without a
@@ -31,9 +32,6 @@ export interface QueuedMatch extends LogMatchPayload {
   syncCode?: MatchSyncRefusal;
 }
 
-const DB_NAME = "padelclash-offline";
-const STORE = "queued-matches";
-
 /** Fired on window whenever the queue's contents change. */
 export const QUEUE_CHANGED_EVENT = "padelclash:queue-changed";
 
@@ -48,31 +46,11 @@ export const QUEUE_CHANGED_EVENT = "padelclash:queue-changed";
  */
 export const BINDING_CHANGED_EVENT = "padelclash:binding-changed";
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(STORE, { keyPath: "id" });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
 async function withStore<T>(
   mode: IDBTransactionMode,
   run: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
-  const db = await openDb();
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const request = run(db.transaction(STORE, mode).objectStore(STORE));
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  } finally {
-    db.close();
-  }
+  return withOfflineStore(QUEUED_MATCHES_STORE, mode, run);
 }
 
 function notifyQueueChanged(): void {

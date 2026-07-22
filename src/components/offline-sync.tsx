@@ -13,7 +13,7 @@ import {
   listQueuedMatches,
   removeQueuedMatch,
   type QueuedMatch,
-} from "@/lib/offline-queue";
+} from "@/services/offline/queue";
 
 /**
  * Flushes the offline log queue on app open and whenever connectivity returns

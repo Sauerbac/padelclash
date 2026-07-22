@@ -4,7 +4,15 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import type { SessionStatus } from "@/app/api/session/route";
 import { dropPrivatePageCaches } from "@/lib/private-cache";
-import { markQueueUnbound } from "@/lib/offline-queue";
+import {
+  BINDING_CHANGED_EVENT,
+  markQueueUnbound,
+} from "@/services/offline/queue";
+import {
+  clearOfflineMatchSnapshot,
+  createOfflineMatchSnapshot,
+  saveOfflineMatchSnapshot,
+} from "@/services/offline/snapshot";
 
 /**
  * The app-open contact with the server, and the client half of spec decision
@@ -93,6 +101,24 @@ export function SessionWatch() {
       if (!response.ok) return;
       const status = (await response.json()) as SessionStatus;
 
+      if (status.bound && status.player) {
+        const snapshotResponse = await fetch("/api/offline-snapshot", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (snapshotResponse.ok) {
+          const snapshot = (await snapshotResponse.json()) as {
+            player: { id: string; name: string };
+            roster: { id: string; name: string }[];
+          };
+          if (snapshot.player.id === status.player.id) {
+            await saveOfflineMatchSnapshot(
+              createOfflineMatchSnapshot(snapshot.player, snapshot.roster),
+            );
+          }
+        }
+      }
+
       // `revoked` is reported exactly once — the route clears the dead cookie
       // as it answers, so every later contact looks like an ordinary visitor.
       // Latch it durably before doing any work, so a purge that fails
@@ -114,6 +140,7 @@ export function SessionWatch() {
       const [purged] = await Promise.all([
         dropPrivatePageCaches(),
         markQueueUnbound(),
+        clearOfflineMatchSnapshot(),
       ]);
       if (purged) owedCleanup.clear();
 
@@ -138,9 +165,11 @@ export function SessionWatch() {
       if (document.visibilityState === "visible") check();
     };
     window.addEventListener("online", check);
+    window.addEventListener(BINDING_CHANGED_EVENT, check);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.removeEventListener("online", check);
+      window.removeEventListener(BINDING_CHANGED_EVENT, check);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [check]);
