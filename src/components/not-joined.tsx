@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
+import { InvitationEntry } from "@/components/invitation-entry";
 import { QueuedMatches } from "@/components/queued-matches";
 
 /**
  * What an installation without a valid Device Binding sees instead of the tab
- * shell (spec decision 33). It is deliberately a dead end: there is no
- * self-service way in, because every route in needs Admin to issue an
- * invitation first. No name picker, no "continue as", no recovery — those were
- * the convenience-grade affordances this design replaced.
+ * shell (spec decision 33). An installed PWA can transfer an Admin-issued
+ * invitation into its own cookie context here, but still cannot mint or
+ * discover access by itself (decision 87).
  *
  * It carries the offline queue anyway. A device whose binding was just revoked
  * may still hold matches it logged before losing access, and the guarantee is
@@ -43,9 +43,11 @@ export function NotJoined() {
           player stats stay private.
         </p>
         <p className="mt-3 text-base leading-normal font-semibold text-muted-foreground">
-          Getting in takes an invite link from the group admin — there&apos;s no
-          way to let yourself in from here.
+          Getting in takes an invite link from the group admin. This screen
+          can&apos;t create access on its own.
         </p>
+
+        <InvitationEntry />
 
         <p className="mt-5 border-t border-hairline pt-4 text-sm font-semibold text-muted-foreground">
           Are you the admin?{" "}

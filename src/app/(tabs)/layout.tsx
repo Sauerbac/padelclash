@@ -17,9 +17,9 @@ export default async function TabsLayout({
   if (!(await viewerForPrivateRead())) return <NotJoined />;
 
   return (
-    <>
+    <div className="flex min-h-full flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
       {children}
       <TabBar />
-    </>
+    </div>
   );
 }

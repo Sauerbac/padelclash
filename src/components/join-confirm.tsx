@@ -7,6 +7,7 @@ import {
   confirmJoinAction,
   type JoinConfirmation,
 } from "@/app/actions/onboarding";
+import { JoinRecoveryGuidance } from "@/components/join-recovery-guidance";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +93,8 @@ export function JoinConfirm({
         : "Who are you?";
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-5 py-10">
+    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 px-5 py-10">
+      <JoinRecoveryGuidance />
       <div className="border px-5 py-6">
         <div className="flex items-start justify-between gap-3">
           <p className="kicker">Welcome to the club</p>

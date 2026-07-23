@@ -33,10 +33,20 @@ spacing, borders, or component styling as design requirements.
   silhouette of the bar and raised centre Log plate, rising around the plate
   before rejoining the bar. It is knowingly the one soft shadow treatment in
   an otherwise flat theme, kept tight so it reads as a lip rather than a glow.
+- Spec decision 86 anchors the tab bar to the
+  viewport rather than letting it participate in page scroll. Its controls sit
+  above the bottom safe area and the tab shell reserves the full occupied
+  height. Feed and Rankings use 14 px labels. The active red rail reaches from
+  the active outer tab to the adjacent edge of the raised Log plate without
+  passing through or behind it.
 - Main tab content is a single centered column with a constrained maximum
   width. Each screen starts with a page heading and then stacks its content
   vertically. On larger screens the column remains narrow rather than becoming
   a multi-column desktop dashboard.
+- Page-level horizontal scrolling is a mobile defect (spec decision 88).
+  Individual controls may scroll only when that is an explicit part of their
+  interaction; otherwise the overflowing element must be corrected at the
+  supported phone widths.
 - There is no separate global header, profile menu, or app-level settings
   screen. The page heading and the bottom tab bar form the primary shell.
 - Player names are navigation targets wherever they appear in match cards,

@@ -21,7 +21,7 @@ export function TabBar() {
   // is active.
   const textTab = (active: boolean) =>
     cn(
-      "-mt-px flex-1 border-t-2 pt-4 pb-3.5 text-center text-xs font-semibold tracking-[2px] uppercase",
+      "-mt-px flex-1 border-t-2 pt-4 pb-3.5 text-center text-sm font-semibold tracking-[2px] uppercase",
       active
         ? "border-primary font-bold text-foreground"
         : "border-transparent text-muted-foreground hover:text-foreground",
@@ -31,7 +31,7 @@ export function TabBar() {
     // One drop shadow follows the silhouette of both the bar and its raised
     // Log plate, so the contour rises around the centre instead of becoming
     // two overlapping rectangular shadows (decision 72).
-    <nav className="sticky bottom-0 z-40 border-t bg-plate pb-[env(safe-area-inset-bottom)] drop-shadow-[0_-5px_7px_rgba(0,0,0,0.9)]">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-plate pb-[env(safe-area-inset-bottom)] drop-shadow-[0_-5px_7px_rgba(0,0,0,0.9)]">
       <div className="mx-auto flex w-full max-w-lg">
         <Link
           href="/"
@@ -41,11 +41,23 @@ export function TabBar() {
           Feed
         </Link>
         <div className="relative flex-1">
+          {feedActive && (
+            <span
+              aria-hidden
+              className="absolute top-[-2px] right-1/2 left-0 mr-[51px] h-0.5 bg-primary"
+            />
+          )}
+          {rankingsActive && (
+            <span
+              aria-hidden
+              className="absolute top-[-2px] right-0 left-1/2 ml-[51px] h-0.5 bg-primary"
+            />
+          )}
           <Link
             href="/log"
             aria-current={logActive ? "page" : undefined}
             aria-label="Log Match"
-            className="absolute -top-3.5 left-1/2 -translate-x-1/2 skew-x-[-8deg] -rotate-2 border-b-[3px] border-accent bg-primary px-6.5 py-3 font-display text-base tracking-[1px] whitespace-nowrap text-primary-foreground uppercase"
+            className="absolute -top-3.5 left-1/2 z-10 w-24 -translate-x-1/2 skew-x-[-8deg] -rotate-2 border-b-[3px] border-accent bg-primary py-3 text-center font-display text-base tracking-[1px] whitespace-nowrap text-primary-foreground uppercase"
           >
             Log
           </Link>

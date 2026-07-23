@@ -184,6 +184,22 @@ instead of the tab shell. Feed, Log Match, Leaderboard, Player Detail, and their
 operations validate the binding. Onboarding routes and Admin login remain reachable;
 a valid Admin session may bypass the read gate as described above.
 
+The Not Joined screen in an installed PWA also accepts a pasted invitation. The
+expected input is the full same-site `/join/{token}` URL; the existing raw 256-bit
+invitation token is accepted as a convenience, but there is no second short-code
+credential format. Valid input continues through the ordinary read-only preview and
+explicit confirmation flow so that the Device Binding cookie is created inside the
+installed PWA's own storage context.
+
+When an invitation is opened on iOS outside standalone mode, the normal join flow
+remains available but is preceded by platform guidance. The reliable recovery for an
+already-installed, unbound PWA is to copy the full invitation, open PadelClash, and
+paste it there. The fallback is to open and accept the invitation in Safari, remove
+the old Home Screen installation, and add it again from Safari so iOS can seed the new
+web app's cookie store. Android keeps the normal join flow without uninstall guidance:
+an in-scope link may open the installed PWA directly, and the universal paste input is
+the fallback when it opens in a browser instead.
+
 ## Rating engine
 
 The engine is carried over from the old codebase **as-is** — it already lives on this
@@ -428,3 +444,11 @@ they earned interest during the grilling:
 | 83 | Web hardening | The private installation is `noindex`; invitation-bearing pages send no referrer. Hide the framework header and add low-complexity type-sniffing and frame protections; a strict CSP is deferred until it can be tested with Next's generated scripts |
 | 84 | Build assets | Keep generated PNG manifest icons and the existing build-time Google Font downloads. Coolify and CI therefore need outbound build access; all resulting font assets are self-hosted by the built application at runtime |
 | 85 | Offline log snapshot | Reliable cold offline logging necessarily persists a minimal private snapshot: the bound Player identity plus the active roster needed by the Match form. It contains no Feed, ratings or Player Detail data, is refreshed after successful online reads, is subject to the same originating-Player sync checks as the queue, and is cleared when revocation is observed |
+
+## Decision log (2026-07-23, mobile shell and invitation recovery)
+
+| # | Decision | Call |
+|---|---|---|
+| 86 | Viewport-anchored tab bar | “Sticky” means fixed to the mobile viewport: the tab bar never travels with page scroll or iOS overscroll, its controls sit above the bottom safe area, and the tab shell reserves the bar's complete height so content is never obscured. Feed and Rankings labels increase from 12 px to 14 px. The active red rail extends inward from the active outer tab to the edge of the raised Log plate, never through or behind the plate |
+| 87 | Invitation transfer into installed PWAs | Every unbound installed PWA accepts a pasted same-site full `/join/{token}` URL or the existing raw token, then reuses the ordinary preview and explicit confirmation flow so the binding is minted in that PWA's cookie store. No human-sized short-code credential is introduced. An iOS browser shows non-blocking recovery guidance above the normal join flow: copy the full link into the installed PWA first; alternatively accept it in Safari, remove the old Home Screen app, and reinstall from Safari. Android receives no uninstall guidance because link capture may open the PWA directly and paste remains the cross-browser fallback |
+| 88 | Mobile page overflow | The application must not expose page-level horizontal scrolling at supported phone widths. Fix the element that exceeds the viewport rather than relying only on a global clipping rule; deliberately scrollable controls may retain local overflow |
