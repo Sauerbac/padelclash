@@ -44,13 +44,13 @@ export function TabBar() {
           {feedActive && (
             <span
               aria-hidden
-              className="absolute top-[-1px] right-1/2 left-0 mr-[51px] h-0.5 bg-primary"
+              className="absolute top-[-1px] right-1/2 left-0 h-0.5 bg-primary"
             />
           )}
           {rankingsActive && (
             <span
               aria-hidden
-              className="absolute top-[-1px] right-0 left-1/2 ml-[51px] h-0.5 bg-primary"
+              className="absolute top-[-1px] right-0 left-1/2 h-0.5 bg-primary"
             />
           )}
           <Link

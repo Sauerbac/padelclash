@@ -36,9 +36,9 @@ spacing, borders, or component styling as design requirements.
 - Spec decision 86 anchors the tab bar to the
   viewport rather than letting it participate in page scroll. Its controls sit
   above the bottom safe area and the tab shell reserves the full occupied
-  height. Feed and Rankings use 14 px labels. The active red rail reaches from
-  the active outer tab to the adjacent edge of the raised Log plate without
-  passing through or behind it.
+  height. Feed and Rankings use 14 px labels. Per decision 89, the active red
+  rail reaches from the active outer tab to the navigation centreline beneath
+  the raised Log plate, so the plate masks its inner end.
 - Main tab content is a single centered column with a constrained maximum
   width. Each screen starts with a page heading and then stacks its content
   vertically. On larger screens the column remains narrow rather than becoming
