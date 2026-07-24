@@ -204,7 +204,11 @@ async function referencedPlayerIds(db: Db): Promise<Set<string>> {
       .from(matchParticipants),
     db.selectDistinct({ playerId: matches.loggedBy }).from(matches),
   ]);
-  return new Set([...participants, ...loggers].map((r) => r.playerId));
+  return new Set(
+    [...participants, ...loggers]
+      .map((row) => row.playerId)
+      .filter((playerId): playerId is string => playerId !== null),
+  );
 }
 
 /**

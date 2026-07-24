@@ -62,12 +62,30 @@ export function MatchHeadline({
 export function MatchPlayerNames({
   players,
 }: {
-  players: { playerId: string; name: string }[];
+  players: (
+    | { kind: "player"; playerId: string; name: string }
+    | { kind: "guest"; name: string }
+  )[];
 }) {
   return players.map((player, index) => (
-    <span key={player.playerId}>
+    <span
+      key={
+        player.kind === "player"
+          ? player.playerId
+          : `guest-${index}-${player.name}`
+      }
+    >
       {index > 0 && <span className="text-muted-foreground"> & </span>}
-      <PlayerLink playerId={player.playerId}>{player.name}</PlayerLink>
+      {player.kind === "player" ? (
+        <PlayerLink playerId={player.playerId}>{player.name}</PlayerLink>
+      ) : (
+        <>
+          {player.name}{" "}
+          <span className="font-mono text-[9px] tracking-[1px] text-accent">
+            GUEST
+          </span>
+        </>
+      )}
     </span>
   ));
 }

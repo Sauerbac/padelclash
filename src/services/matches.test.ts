@@ -9,6 +9,10 @@ import type { Db } from "./db";
 import type { Player } from "./db/schema";
 import { uuidv7 } from "../lib/uuidv7";
 import { STARTING_RATING } from "../domain/rating/engine";
+import {
+  guestParticipant as guest,
+  playerParticipant as player,
+} from "../domain/match-participant";
 import { createPlayer, retirePlayer } from "./players";
 import {
   deleteMatch,
@@ -33,7 +37,7 @@ function singles(
     id: uuidv7(),
     playedAt: new Date(),
     loggedBy: winner.id,
-    sides: { A: [winner.id], B: [loser.id] },
+    sides: { A: [player(winner.id)], B: [player(loser.id)] },
     winnerSide: "A" as const,
     ...overrides,
   };
@@ -55,14 +59,14 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const result = await logMatch(db, singles(simon, alex));
 
     expect(result.alreadyLogged).toBe(false);
-    // Two fresh 1000-rated players, K=32: expected score 0.5, so ±16.
+    // Two fresh Provisional Players use K=100, so the cap yields ±50.
     const bySide = Object.fromEntries(result.deltas.map((d) => [d.side, d]));
     expect(bySide.A.playerId).toBe(simon.id);
-    expect(bySide.A.delta).toBeCloseTo(16);
-    expect(bySide.A.ratingAfter).toBeCloseTo(1016);
+    expect(bySide.A.delta).toBe(50);
+    expect(bySide.A.ratingAfter).toBe(1050);
     expect(bySide.B.playerId).toBe(alex.id);
-    expect(bySide.B.delta).toBeCloseTo(-16);
-    expect(bySide.B.ratingAfter).toBeCloseTo(984);
+    expect(bySide.B.delta).toBe(-50);
+    expect(bySide.B.ratingAfter).toBe(950);
   });
 
   it("a retried sync with the same id does not double-log", async () => {
@@ -74,12 +78,12 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(retry.match.id).toBe(input.id);
     // The stored payoff still comes back so a retried submit can render it.
     const bySide = Object.fromEntries(retry.deltas.map((d) => [d.side, d]));
-    expect(bySide.A.delta).toBeCloseTo(16);
+    expect(bySide.A.delta).toBe(50);
 
     // Exactly one match logged: Alex's rating dropped once, not twice.
     const leaderboard = await getLeaderboard(db);
     const alexRow = leaderboard.find((e) => e.playerId === alex.id);
-    expect(alexRow?.rating).toBeCloseTo(984);
+    expect(alexRow?.rating).toBe(950);
   });
 
   it("ranks players after 3 matches and reports W–L", async () => {
@@ -105,7 +109,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(caseyRow.matchesPlayed).toBe(0);
   });
 
-  it("splits the side delta equally in doubles", async () => {
+  it("updates every doubles participant independently", async () => {
     const casey = await createPlayer(db, "Casey");
     const dana = await createPlayer(db, "Dana");
 
@@ -113,15 +117,153 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       id: uuidv7(),
       playedAt: new Date(),
       loggedBy: simon.id,
-      sides: { A: [simon.id, casey.id], B: [alex.id, dana.id] },
+      sides: {
+        A: [player(simon.id), player(casey.id)],
+        B: [player(alex.id), player(dana.id)],
+      },
       winnerSide: "A",
     });
 
-    // Four fresh 1000s: side delta 16, split equally → ±8 per player.
+    // Four fresh equal Provisional Players independently reach the ±50 cap.
     expect(result.deltas).toHaveLength(4);
     for (const d of result.deltas) {
-      expect(d.delta).toBeCloseTo(d.side === "A" ? 8 : -8);
+      expect(d.delta).toBe(d.side === "A" ? 50 : -50);
     }
+  });
+
+  it("persists a Guest while emitting Rating output only for Players", async () => {
+    const casey = await createPlayer(db, "Casey");
+    const result = await logMatch(db, {
+      id: uuidv7(),
+      playedAt: new Date(),
+      loggedBy: simon.id,
+      sides: {
+        A: [player(simon.id), guest("  Visiting   Pat  ")],
+        B: [player(alex.id), player(casey.id)],
+      },
+      winnerSide: "A",
+    });
+
+    expect(result.deltas).toHaveLength(3);
+    expect(result.deltas.map((row) => row.playerId).sort()).toEqual(
+      [simon.id, alex.id, casey.id].sort(),
+    );
+
+    const feed = await getFeed(db);
+    expect(feed[0].participants.map((participant) => participant.kind)).toEqual([
+      "player",
+      "guest",
+      "player",
+      "player",
+    ]);
+    expect(feed[0].participants[1]).toEqual({
+      kind: "guest",
+      name: "Visiting Pat",
+      side: "A",
+      slot: 1,
+    });
+
+    const simonDetail = await getPlayerDetail(db, simon.id);
+    expect(simonDetail?.wins).toBe(1);
+    expect(simonDetail?.partners).toEqual([]);
+    expect(simonDetail?.headToHead.map((record) => record.name)).toEqual([
+      "Alex",
+      "Casey",
+    ]);
+
+    const alexDetail = await getPlayerDetail(db, alex.id);
+    expect(alexDetail?.partners).toEqual([
+      {
+        playerId: casey.id,
+        name: "Casey",
+        wins: 0,
+        losses: 1,
+      },
+    ]);
+  });
+
+  it("rejects invalid Guest boundaries and roster-name collisions", async () => {
+    const casey = await createPlayer(db, "Casey");
+    await retirePlayer(db, casey.id);
+
+    await expect(
+      logMatch(
+        db,
+        singles(simon, alex, {
+          sides: { A: [guest("Visitor")], B: [player(alex.id)] },
+        }),
+      ),
+    ).rejects.toThrow(/guest|player/i);
+
+    await expect(
+      logMatch(db, {
+        ...singles(simon, alex),
+        sides: {
+          A: [guest("One"), guest("Two")],
+          B: [player(simon.id), player(alex.id)],
+        },
+      }),
+    ).rejects.toThrow(/player|guest/i);
+
+    await expect(
+      logMatch(db, {
+        ...singles(simon, alex),
+        sides: {
+          A: [player(simon.id), guest("Visitor")],
+          B: [player(alex.id), guest("  VISITOR ")],
+        },
+      }),
+    ).rejects.toThrow(/unique/i);
+
+    for (const reserved of ["simon", " CASEY "]) {
+      await expect(
+        logMatch(db, {
+          ...singles(simon, alex),
+          sides: {
+            A: [player(simon.id), guest(reserved)],
+            B: [player(alex.id), guest("Other Guest")],
+          },
+        }),
+      ).rejects.toThrow(/roster/i);
+    }
+  });
+
+  it("keeps a Guest retry idempotent and replaces Guests on edit", async () => {
+    const casey = await createPlayer(db, "Casey");
+    const input = {
+      id: uuidv7(),
+      playedAt: new Date(),
+      loggedBy: simon.id,
+      sides: {
+        A: [player(simon.id), guest("First Guest")],
+        B: [player(alex.id), player(casey.id)],
+      },
+      winnerSide: "A" as const,
+    };
+    await logMatch(db, input);
+    expect((await logMatch(db, input)).alreadyLogged).toBe(true);
+
+    await editMatch(
+      db,
+      {
+        id: input.id,
+        playedAt: input.playedAt,
+        sides: {
+          A: [player(simon.id), guest("Replacement Guest")],
+          B: [player(alex.id), player(casey.id)],
+        },
+        winnerSide: "A",
+      },
+      { playerId: simon.id, isAdmin: false },
+    );
+
+    const found = await getMatch(db, input.id);
+    expect(found?.participants.map((participant) => participant.name)).toEqual([
+      "Simon",
+      "Replacement Guest",
+      "Alex",
+      "Casey",
+    ]);
   });
 
   it("a late-synced earlier match slots into history by playedAt", async () => {
@@ -133,16 +275,14 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     await logMatch(db, singles(simon, alex, { playedAt: day2 }));
     await logMatch(db, singles(casey, simon, { playedAt: day1 }));
 
-    // Correct replay order (day 1 first): Casey beats a 1000-rated Simon and
-    // ends at exactly 1016; Simon then beats Alex from 984, gaining 16.74
-    // (E = 1/(1 + 10^((1000-984)/400)) ≈ 0.477) → ≈ 1000.74. If the log were
-    // replayed in logged order instead, Casey would sit at ≈ 1016.74.
+    // Correct replay order (day 1 first): Casey reaches 1050 and Simon falls
+    // to 950, then Simon's win over Alex reaches the universal +50 cap.
     const byName = new Map(
       (await getLeaderboard(db)).map((e) => [e.name, e.rating]),
     );
-    expect(byName.get("Casey")).toBeCloseTo(1016, 5);
-    expect(byName.get("Simon")).toBeCloseTo(1000.74, 1);
-    expect(byName.get("Alex")).toBeCloseTo(983.26, 1);
+    expect(byName.get("Casey")).toBe(1050);
+    expect(byName.get("Simon")).toBe(1000);
+    expect(byName.get("Alex")).toBe(950);
   });
 
   it("stores set scores and returns them with the match", async () => {
@@ -164,13 +304,19 @@ describe.skipIf(!hasDatabase)("matches service", () => {
 
     // Sides must be 1v1 or 2v2 (spec "Match")…
     await expect(
-      logMatch(db, singles(simon, alex, { sides: { A: [], B: [alex.id] } })),
+      logMatch(
+        db,
+        singles(simon, alex, { sides: { A: [], B: [player(alex.id)] } }),
+      ),
     ).rejects.toThrow(/side/i);
     await expect(
       logMatch(
         db,
         singles(simon, alex, {
-          sides: { A: [simon.id, casey.id], B: [alex.id] },
+          sides: {
+            A: [player(simon.id), player(casey.id)],
+            B: [player(alex.id)],
+          },
         }),
       ),
     ).rejects.toThrow(/side/i);
@@ -178,7 +324,9 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     await expect(
       logMatch(
         db,
-        singles(simon, alex, { sides: { A: [simon.id], B: [simon.id] } }),
+        singles(simon, alex, {
+          sides: { A: [player(simon.id)], B: [player(simon.id)] },
+        }),
       ),
     ).rejects.toThrow(/side/i);
     await expect(
@@ -186,7 +334,10 @@ describe.skipIf(!hasDatabase)("matches service", () => {
         id: uuidv7(),
         playedAt: new Date(),
         loggedBy: simon.id,
-        sides: { A: [simon.id, simon.id], B: [alex.id, casey.id] },
+        sides: {
+          A: [player(simon.id), player(simon.id)],
+          B: [player(alex.id), player(casey.id)],
+        },
         winnerSide: "A",
       }),
     ).rejects.toThrow(/side/i);
@@ -209,6 +360,22 @@ describe.skipIf(!hasDatabase)("matches service", () => {
         logMatch(db, singles(simon, alex, { sets })),
       ).rejects.toThrow(/set/i);
     }
+    await expect(
+      logMatch(db, singles(simon, alex, { sets: [{ a: 6, b: 6 }] })),
+    ).rejects.toThrow(/winner/i);
+    await expect(
+      logMatch(
+        db,
+        singles(simon, alex, {
+          winnerSide: "A",
+          sets: [
+            { a: 6, b: 4 },
+            { a: 3, b: 6 },
+            { a: 4, b: 6 },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/declared|winner/i);
   });
 
   it("a delete racing a log is serialized — projections miss nothing", async () => {
@@ -227,7 +394,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(byName.get("Simon")?.matchesPlayed).toBe(0);
     expect(byName.get("Simon")?.rating).toBe(1000);
     expect(byName.get("Casey")?.matchesPlayed).toBe(1);
-    expect(byName.get("Casey")?.rating).toBeCloseTo(1016);
+    expect(byName.get("Casey")?.rating).toBe(1050);
   });
 
   it("concurrent logs are serialized — both land in the projections", async () => {
@@ -261,8 +428,8 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     // ratings back at the single-match values.
     const byName = new Map((await getLeaderboard(db)).map((e) => [e.name, e]));
     expect(byName.get("Simon")?.matchesPlayed).toBe(1);
-    expect(byName.get("Simon")?.rating).toBeCloseTo(1016);
-    expect(byName.get("Alex")?.rating).toBeCloseTo(984);
+    expect(byName.get("Simon")?.rating).toBe(1050);
+    expect(byName.get("Alex")?.rating).toBe(950);
     expect(byName.get("Simon")?.wins).toBe(1);
     expect(byName.get("Alex")?.losses).toBe(1);
   });
@@ -312,7 +479,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       {
         id: logged.match.id,
         playedAt: logged.match.playedAt,
-        sides: { A: [simon.id], B: [alex.id] },
+        sides: { A: [player(simon.id)], B: [player(alex.id)] },
         winnerSide: "B",
         sets: null,
       },
@@ -321,14 +488,14 @@ describe.skipIf(!hasDatabase)("matches service", () => {
 
     // The corrected deltas come back (for a payoff-style confirmation)…
     const bySide = Object.fromEntries(edited.deltas.map((d) => [d.side, d]));
-    expect(bySide.A.delta).toBeCloseTo(-16);
-    expect(bySide.B.delta).toBeCloseTo(16);
+    expect(bySide.A.delta).toBe(-50);
+    expect(bySide.B.delta).toBe(50);
 
     // …and the projections read as if the match was always logged that way.
     const byName = new Map((await getLeaderboard(db)).map((e) => [e.name, e]));
-    expect(byName.get("Alex")?.rating).toBeCloseTo(1016);
+    expect(byName.get("Alex")?.rating).toBe(1050);
     expect(byName.get("Alex")?.wins).toBe(1);
-    expect(byName.get("Simon")?.rating).toBeCloseTo(984);
+    expect(byName.get("Simon")?.rating).toBe(950);
     expect(byName.get("Simon")?.losses).toBe(1);
   });
 
@@ -349,7 +516,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       {
         id: second.match.id,
         playedAt: new Date("2026-07-08T18:00:00Z"),
-        sides: { A: [casey.id], B: [simon.id] },
+        sides: { A: [player(casey.id)], B: [player(simon.id)] },
         winnerSide: "A",
         sets: null,
       },
@@ -357,13 +524,13 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     );
 
     // Same worked example as the late-sync test: with Casey's win first,
-    // Casey ends at exactly 1016 and Simon beats Alex from 984 for ≈ 1000.74.
+    // Casey ends at 1050 and Simon's later win brings him back to 1000.
     const byName = new Map(
       (await getLeaderboard(db)).map((e) => [e.name, e.rating]),
     );
-    expect(byName.get("Casey")).toBeCloseTo(1016, 5);
-    expect(byName.get("Simon")).toBeCloseTo(1000.74, 1);
-    expect(byName.get("Alex")).toBeCloseTo(983.26, 1);
+    expect(byName.get("Casey")).toBe(1050);
+    expect(byName.get("Simon")).toBe(1000);
+    expect(byName.get("Alex")).toBe(950);
   });
 
   it("editing sides and sets replaces the participants wholesale", async () => {
@@ -377,7 +544,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       {
         id: logged.match.id,
         playedAt: logged.match.playedAt,
-        sides: { A: [simon.id], B: [casey.id] },
+        sides: { A: [player(simon.id)], B: [player(casey.id)] },
         winnerSide: "A",
         sets,
       },
@@ -391,7 +558,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(byName.get("Alex")?.matchesPlayed).toBe(0);
     expect(byName.get("Alex")?.rating).toBe(1000);
     expect(byName.get("Casey")?.losses).toBe(1);
-    expect(byName.get("Casey")?.rating).toBeCloseTo(984);
+    expect(byName.get("Casey")?.rating).toBe(950);
   });
 
   it("enforces edit rights and input validation on edit", async () => {
@@ -399,7 +566,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const correction = {
       id: logged.match.id,
       playedAt: logged.match.playedAt,
-      sides: { A: [simon.id], B: [alex.id] },
+      sides: { A: [player(simon.id)], B: [player(alex.id)] },
       winnerSide: "B" as const,
       sets: null,
     };
@@ -415,7 +582,10 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     await expect(
       editMatch(
         db,
-        { ...correction, sides: { A: [simon.id], B: [simon.id] } },
+        {
+          ...correction,
+          sides: { A: [player(simon.id)], B: [player(simon.id)] },
+        },
         { playerId: simon.id, isAdmin: false },
       ),
     ).rejects.toThrow(/side/i);
@@ -458,15 +628,18 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       ["Casey", "A"],
       ["Simon", "B"],
     ]);
-    // Deltas come from rating_history: day 1 replays first, so Casey's day 2
-    // win is against a 1016-rated Simon (E ≈ 0.523 for Simon → Casey +16.74).
+    // Deltas come from rating_history: day 1 replays first and both Players
+    // are still Provisional, so Casey's day-2 win reaches the +50 cap.
     const caseyRow = newest.participants[0];
-    expect(caseyRow.delta).toBeCloseTo(16.74, 1);
-    expect(caseyRow.ratingAfter).toBeCloseTo(1016.74, 1);
+    if (caseyRow.kind !== "player") throw new Error("Expected Player");
+    expect(caseyRow.delta).toBe(50);
+    expect(caseyRow.ratingAfter).toBe(1050);
 
     expect(oldest.sets).toEqual(sets);
     expect(oldest.participants.map((p) => p.name)).toEqual(["Simon", "Alex"]);
-    expect(oldest.participants[0].delta).toBeCloseTo(16);
+    const oldestWinner = oldest.participants[0];
+    if (oldestWinner.kind !== "player") throw new Error("Expected Player");
+    expect(oldestWinner.delta).toBe(50);
   });
 
   it("fetches a single match with named, sided participants", async () => {
@@ -504,13 +677,13 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(detail?.rank).toBe(1);
     expect(detail?.wins).toBe(3);
     expect(detail?.losses).toBe(0);
-    // Worked K=32 fold: 1000 → 1016 → 1030.53 → 1043.75.
-    expect(detail?.rating).toBeCloseTo(1043.75, 1);
+    // Provisional fold: 1000 → 1050 → 1086 → 1113.
+    expect(detail?.rating).toBe(1113);
 
     const alexDetail = await getPlayerDetail(db, alex.id);
     expect(alexDetail?.rank).toBe(2);
     expect(alexDetail?.losses).toBe(3);
-    expect(alexDetail?.rating).toBeCloseTo(956.25, 1);
+    expect(alexDetail?.rating).toBe(887);
   });
 
   it("player detail's rating series is chronological even when logged out of order", async () => {
@@ -525,13 +698,13 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const detail = await getPlayerDetail(db, simon.id);
 
     // Same worked example as the late-sync test: Simon loses to Casey on
-    // day 1 (1000 → 984), then beats Alex from 984 (E ≈ 0.477 → ≈ 1000.74).
+    // day 1 (1000 → 950), then beats Alex and returns to 1000.
     expect(detail?.ratingSeries.map((p) => p.playedAt)).toEqual([day1, day2]);
-    expect(detail?.ratingSeries[0].ratingAfter).toBeCloseTo(984, 5);
-    expect(detail?.ratingSeries[1].ratingAfter).toBeCloseTo(1000.74, 1);
+    expect(detail?.ratingSeries[0].ratingAfter).toBe(950);
+    expect(detail?.ratingSeries[1].ratingAfter).toBe(1000);
     // Each point carries its match's projection delta for the chart tooltip.
-    expect(detail?.ratingSeries[0].delta).toBeCloseTo(-16, 5);
-    expect(detail?.ratingSeries[1].delta).toBeCloseTo(16.74, 1);
+    expect(detail?.ratingSeries[0].delta).toBe(-50);
+    expect(detail?.ratingSeries[1].delta).toBe(50);
   });
 
   it("player detail lists only that player's matches, newest first", async () => {
@@ -554,7 +727,11 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       ["Simon", "A"],
       ["Alex", "B"],
     ]);
-    expect(detail?.matches[1].participants[0].delta).toBeCloseTo(16);
+    const detailWinner = detail?.matches[1].participants[0];
+    expect(detailWinner?.kind).toBe("player");
+    if (detailWinner?.kind === "player") {
+      expect(detailWinner.delta).toBe(50);
+    }
   });
 
   it("player detail tallies head-to-head records vs each opponent", async () => {
@@ -568,7 +745,10 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       id: uuidv7(),
       playedAt: new Date(),
       loggedBy: simon.id,
-      sides: { A: [simon.id, casey.id], B: [alex.id, dana.id] },
+      sides: {
+        A: [player(simon.id), player(casey.id)],
+        B: [player(alex.id), player(dana.id)],
+      },
       winnerSide: "A",
     });
     await logMatch(db, singles(casey, simon));
@@ -592,7 +772,10 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       id: uuidv7(),
       playedAt: new Date(),
       loggedBy: simon.id,
-      sides: { A: a.map((p) => p.id), B: b.map((p) => p.id) },
+      sides: {
+        A: a.map((participant) => player(participant.id)),
+        B: b.map((participant) => player(participant.id)),
+      },
       winnerSide: "A" as const,
     });
 
@@ -631,7 +814,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const retiree = await getPlayerDetail(db, alex.id);
     expect(retiree?.retired).toBe(true);
     expect(retiree?.losses).toBe(1);
-    expect(retiree?.rating).toBeCloseTo(984);
+    expect(retiree?.rating).toBe(950);
 
     // A player yet to play: starting rating, empty everything.
     const casey = await createPlayer(db, "Casey");

@@ -36,6 +36,13 @@
       "when": 1784655034080,
       "tag": "0004_secure_onboarding_cutover",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784846989420,
+      "tag": "0005_rating_guests",
+      "breakpoints": true
     }
   ]
 }

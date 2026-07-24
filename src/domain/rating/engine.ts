@@ -1,61 +1,46 @@
-// The pure rating engine — ratings are derived by replaying the match log
-// (docs/padelclash-lite-spec.md, "Rating engine"). Carried over verbatim from
-// the pre-Lite codebase.
-//
-// This module is FRAMEWORK-FREE: no Next, no Drizzle, no src/db. It is testable
-// in milliseconds with no infrastructure. The transaction that persists its
-// output lives one layer up, in services/ — never here.
-//
-// A Side is modelled as an array of player ids, so doubles is the *same* engine
-// with sides of one or two; the formula below generalises (mean Side rating,
-// delta split equally). A Provisional high-K phase is on the spec's Later list;
-// the extension point is `kFactor()`.
+// Framework-free Rating replay. Persistence belongs in services/.
+
+import type {
+  GuestParticipant,
+  MatchParticipant as EngineParticipant,
+  PlayerParticipant,
+} from "../match-participant";
+
+export type { EngineParticipant, GuestParticipant, PlayerParticipant };
 
 export type PlayerId = string;
 export type MatchSide = "A" | "B";
 
-/** The starting Rating of an unseen Player. */
 export const STARTING_RATING = 1000;
-/** Normal K-factor. A Provisional high-K phase is deferred (Later list). */
-export const BASE_K = 32;
-/** The logistic divisor in the expected-score formula. */
+export const ESTABLISHED_K = 50;
+export const PROVISIONAL_K = 100;
 export const RATING_DIVISOR = 400;
-/** Competitive matches a Player needs to hold a Rank. */
 export const DEFAULT_RANKED_THRESHOLD = 3;
+export const MIN_CHANGE = 1;
+export const MAX_CHANGE = 50;
 
-/**
- * One element of the replay stream. A minimal, pure view of a `match` row plus
- * its participants — enough for the engine, nothing more. Built in the domain
- * layer (id included, UUIDv7) without a DB round-trip.
- *
- * In Lite v1 the app only ever produces `classification: "competitive"` and
- * `status: "confirmed"`; the other values are kept so the engine ports untouched
- * and the casual-flag / confirmation Later items stay pure add-ons.
- */
+export interface EngineSetScore {
+  a: number;
+  b: number;
+}
+
 export interface EngineMatch {
   id: string;
   playedAt: Date;
   loggedAt: Date;
   classification: "competitive" | "casual";
   status: "pending" | "confirmed" | "contested" | "voided";
-  /** Player ids per Side. One id = singles; two = doubles. */
-  sides: Record<MatchSide, readonly PlayerId[]>;
+  sides: Record<MatchSide, readonly EngineParticipant[]>;
   winnerSide: MatchSide;
+  sets: readonly EngineSetScore[] | null;
 }
 
-/**
- * The threaded state per Player in the replayed log — rating-only and minimal:
- * nothing here that does not feed a future Rating. `matchesSinceReset` mirrors
- * `competitiveMatchesPlayed` (no resets in Lite); both are carried so a future
- * Provisional phase is a pure add-on.
- */
 export interface PlayerState {
   rating: number;
   competitiveMatchesPlayed: number;
   matchesSinceReset: number;
 }
 
-/** One per-match output row per participant. These rows ARE `rating_history`. */
 export interface ParticipantOutput {
   matchId: string;
   playerId: PlayerId;
@@ -64,12 +49,10 @@ export interface ParticipantOutput {
   delta: number;
   ratingAfter: number;
   wasProvisional: boolean;
-  /** The participant's Side's pre-match expected score (Win Probability). */
-  winProbability: number;
+  expectedScore: number;
   playedAt: Date;
 }
 
-/** One `current_rating` row — the end-state of the replay loop, written out. */
 export interface CurrentRating {
   playerId: PlayerId;
   rating: number;
@@ -80,28 +63,19 @@ export interface CurrentRating {
   lastMatchAt: Date | null;
 }
 
-/** The full projection of one group's log: both projection tables, in memory. */
 export interface GroupProjection {
   currentRating: Map<PlayerId, CurrentRating>;
   ratingHistory: ParticipantOutput[];
 }
 
-/**
- * Logistic expected score of a Side rated `ratingFor` against `ratingAgainst`.
- * E + E' == 1 (to floating-point precision) for the mirror call, which is what
- * makes per-match deltas sum to zero.
- */
 export function expectedScore(ratingFor: number, ratingAgainst: number): number {
   return 1 / (1 + 10 ** ((ratingAgainst - ratingFor) / RATING_DIVISOR));
 }
 
-/**
- * The K-factor for a Rating update. Constant in Lite v1. A Provisional phase
- * (higher K for a Player's first matches) would plug in here using the counts
- * on `PlayerState` — that change re-adds the `state` parameter (Later list).
- */
-export function kFactor(): number {
-  return BASE_K;
+export function kFactor(state: PlayerState): number {
+  return state.competitiveMatchesPlayed < DEFAULT_RANKED_THRESHOLD
+    ? PROVISIONAL_K
+    : ESTABLISHED_K;
 }
 
 function stateOf(
@@ -118,69 +92,90 @@ function stateOf(
 }
 
 function mean(values: readonly number[]): number {
-  return values.reduce((a, b) => a + b, 0) / values.length;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function scoreMultiplier(
+  sets: readonly EngineSetScore[] | null,
+  winnerSide: MatchSide,
+): number {
+  if (sets === null) return 1;
+  let winnerGames = 0;
+  let loserGames = 0;
+  for (const set of sets) {
+    winnerGames += winnerSide === "A" ? set.a : set.b;
+    loserGames += winnerSide === "A" ? set.b : set.a;
+  }
+  const totalGames = winnerGames + loserGames;
+  const dominance =
+    totalGames === 0 ? 0 : Math.max(0, winnerGames - loserGames) / totalGames;
+  return 1 + 0.4 * dominance;
 }
 
 /**
- * The engine function (ADR-0001): a pure step from prior state + one match to
- * the next state and one output row per participant. Does not mutate `prior`;
- * returns a fresh state map so the fold stays referentially honest.
- *
- * Caller guarantees `match` belongs in the stream (Competitive, non-Voided).
+ * Pure step from one immutable pre-Match snapshot to the next. Guests receive
+ * an input Rating but never an output or threaded state.
  */
 export function replayMatch(
   prior: ReadonlyMap<PlayerId, PlayerState>,
   match: EngineMatch,
 ): { next: Map<PlayerId, PlayerState>; outputs: ParticipantOutput[] } {
-  const sideRating: Record<MatchSide, number> = {
-    A: mean(match.sides.A.map((id) => stateOf(prior, id).rating)),
-    B: mean(match.sides.B.map((id) => stateOf(prior, id).rating)),
+  const players = [...match.sides.A, ...match.sides.B].filter(
+    (participant): participant is PlayerParticipant =>
+      participant.kind === "player",
+  );
+  const guestRating = mean(
+    players.map((participant) => stateOf(prior, participant.playerId).rating),
+  );
+  const participantRating = (participant: EngineParticipant): number =>
+    participant.kind === "player"
+      ? stateOf(prior, participant.playerId).rating
+      : guestRating;
+  const opposingMean: Record<MatchSide, number> = {
+    A: mean(match.sides.B.map(participantRating)),
+    B: mean(match.sides.A.map(participantRating)),
   };
-
-  const expected: Record<MatchSide, number> = {
-    A: expectedScore(sideRating.A, sideRating.B),
-    B: expectedScore(sideRating.B, sideRating.A),
-  };
-
+  const multiplier = scoreMultiplier(match.sets, match.winnerSide);
   const next = new Map(prior);
   const outputs: ParticipantOutput[] = [];
 
   for (const side of ["A", "B"] as const) {
-    const players = match.sides[side];
-    const actual = match.winnerSide === side ? 1 : 0;
-    // Side delta, then split equally across the Side's players.
-    const players0 = players.map((id) => stateOf(prior, id));
-    const k = kFactor();
-    const sideDelta = k * (actual - expected[side]);
-    const perPlayerDelta = sideDelta / players.length;
+    for (const participant of match.sides[side]) {
+      if (participant.kind === "guest") continue;
+      const before = stateOf(prior, participant.playerId);
+      const expected = expectedScore(before.rating, opposingMean[side]);
+      const won = match.winnerSide === side;
+      const base = kFactor(before) * (won ? 1 - expected : expected);
+      const magnitude = Math.max(
+        MIN_CHANGE,
+        Math.min(MAX_CHANGE, Math.round(base * multiplier)),
+      );
+      const delta = won ? magnitude : -magnitude;
+      const ratingAfter = before.rating + delta;
 
-    players.forEach((id, i) => {
-      const before = players0[i];
-      const ratingAfter = before.rating + perPlayerDelta;
-      next.set(id, {
+      next.set(participant.playerId, {
         rating: ratingAfter,
         competitiveMatchesPlayed: before.competitiveMatchesPlayed + 1,
         matchesSinceReset: before.matchesSinceReset + 1,
       });
       outputs.push({
         matchId: match.id,
-        playerId: id,
+        playerId: participant.playerId,
         side,
         ratingBefore: before.rating,
-        delta: perPlayerDelta,
+        delta,
         ratingAfter,
-        // Provisional deferred this slice: no Player is treated as provisional.
-        wasProvisional: false,
-        winProbability: expected[side],
+        wasProvisional:
+          before.competitiveMatchesPlayed < DEFAULT_RANKED_THRESHOLD,
+        expectedScore: expected,
         playedAt: match.playedAt,
       });
-    });
+    }
   }
 
   return { next, outputs };
 }
 
-/** Total order on the replay stream: (played-at, logged-at, id). */
 export function compareMatches(a: EngineMatch, b: EngineMatch): number {
   return (
     a.playedAt.getTime() - b.playedAt.getTime() ||
@@ -189,20 +184,13 @@ export function compareMatches(a: EngineMatch, b: EngineMatch): number {
   );
 }
 
-/**
- * Replay a whole group's match log into both projection tables. Pure and
- * order-independent: filters to the Competitive, non-Voided stream, sorts by the
- * stable total order, then folds `replayMatch`. Calling it twice on the same log
- * yields identical output (idempotent rebuild).
- */
 export function projectGroup(
   matches: readonly EngineMatch[],
   opts: { rankedThreshold?: number } = {},
 ): GroupProjection {
   const rankedThreshold = opts.rankedThreshold ?? DEFAULT_RANKED_THRESHOLD;
-
   const stream = matches
-    .filter((m) => m.classification === "competitive" && m.status !== "voided")
+    .filter((match) => match.classification === "competitive" && match.status !== "voided")
     .sort(compareMatches);
 
   let state: ReadonlyMap<PlayerId, PlayerState> = new Map();
@@ -212,21 +200,22 @@ export function projectGroup(
   for (const match of stream) {
     const { next, outputs } = replayMatch(state, match);
     state = next;
-    for (const o of outputs) {
-      ratingHistory.push(o);
-      lastMatchAt.set(o.playerId, match.playedAt);
+    for (const output of outputs) {
+      ratingHistory.push(output);
+      lastMatchAt.set(output.playerId, match.playedAt);
     }
   }
 
   const currentRating = new Map<PlayerId, CurrentRating>();
-  for (const [playerId, s] of state) {
+  for (const [playerId, player] of state) {
     currentRating.set(playerId, {
       playerId,
-      rating: s.rating,
-      competitiveMatchesPlayed: s.competitiveMatchesPlayed,
-      matchesSinceReset: s.matchesSinceReset,
-      isProvisional: false,
-      isRanked: s.competitiveMatchesPlayed >= rankedThreshold,
+      rating: player.rating,
+      competitiveMatchesPlayed: player.competitiveMatchesPlayed,
+      matchesSinceReset: player.matchesSinceReset,
+      isProvisional:
+        player.competitiveMatchesPlayed < DEFAULT_RANKED_THRESHOLD,
+      isRanked: player.competitiveMatchesPlayed >= rankedThreshold,
       lastMatchAt: lastMatchAt.get(playerId) ?? null,
     });
   }
@@ -234,19 +223,15 @@ export function projectGroup(
   return { currentRating, ratingHistory };
 }
 
-/**
- * Rank each ranked Player in a projection (1-based, highest rating first) — the
- * Leaderboard's ordering, expressed once. Unranked Players are absent from the map.
- * Shared by the leaderboard read, the log payoff, and the match-detail rank deltas
- * so "rank" means exactly one thing everywhere.
- */
 export function rankMap(
   current: ReadonlyMap<PlayerId, CurrentRating>,
 ): Map<PlayerId, number> {
   const ranked = [...current.values()]
-    .filter((c) => c.isRanked)
-    .sort((a, b) => b.rating - a.rating);
-  const ranks = new Map<PlayerId, number>();
-  ranked.forEach((c, i) => ranks.set(c.playerId, i + 1));
-  return ranks;
+    .filter((entry) => entry.isRanked)
+    .sort(
+      (a, b) =>
+        b.rating - a.rating ||
+        (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
+    );
+  return new Map(ranked.map((entry, index) => [entry.playerId, index + 1]));
 }

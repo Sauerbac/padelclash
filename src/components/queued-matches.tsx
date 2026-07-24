@@ -53,10 +53,15 @@ export function QueuedMatches() {
 function QueuedMatchCard({ match }: { match: QueuedMatch }) {
   const loserSide = match.winnerSide === "A" ? "B" : "A";
   const players = (side: "A" | "B") =>
-    match.sides[side].map((playerId, index) => ({
-      playerId,
-      name: match.names[side][index],
-    }));
+    match.sides[side].map((participant, index) =>
+      participant.kind === "player"
+        ? {
+            kind: "player" as const,
+            playerId: participant.playerId,
+            name: match.names[side][index],
+          }
+        : { kind: "guest" as const, name: participant.name },
+    );
   const winners = players(match.winnerSide);
   const losers = players(loserSide);
   const sets = setScores(match.sets, match.winnerSide);

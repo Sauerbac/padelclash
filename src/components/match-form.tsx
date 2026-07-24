@@ -22,6 +22,10 @@ import {
 import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
+import {
+  playerParticipant,
+  type MatchParticipant,
+} from "@/domain/match-participant";
 
 interface RosterEntry {
   id: string;
@@ -53,7 +57,7 @@ export interface EditableMatch {
   id: string;
   /** ISO string; converted to the device's local time on the client. */
   playedAtIso: string;
-  sides: Record<Side, string[]>;
+  sides: Record<Side, MatchParticipant[]>;
   winnerSide: Side;
   sets: { a: number; b: number }[] | null;
 }
@@ -69,6 +73,28 @@ export function MatchForm({
   /** When set: pre-fill from this match and save corrections to it. */
   editing?: EditableMatch;
 }) {
+  const guestBySlotValue = new Map<string, MatchParticipant>();
+  const guestOptions: RosterEntry[] = [];
+  if (editing) {
+    for (const side of ["A", "B"] as const) {
+      editing.sides[side].forEach((participant, index) => {
+        if (participant.kind !== "guest") return;
+        const value = guestSlotValue(side, index);
+        guestBySlotValue.set(value, participant);
+        guestOptions.push({ id: value, name: `${participant.name} (Guest)` });
+      });
+    }
+  }
+  const pickerOptions = [...roster, ...guestOptions];
+  const editableSlotValue = (
+    participant: MatchParticipant | undefined,
+    side: Side,
+    index: number,
+  ): string =>
+    participant?.kind === "guest"
+      ? guestSlotValue(side, index)
+      : participant?.playerId ?? "";
+
   const [doubles, setDoubles] = useState(
     editing ? editing.sides.A.length === 2 : false,
   );
@@ -76,10 +102,10 @@ export function MatchForm({
   const [slots, setSlots] = useState<Slots>(() =>
     editing
       ? {
-          a1: editing.sides.A[0] ?? "",
-          a2: editing.sides.A[1] ?? "",
-          b1: editing.sides.B[0] ?? "",
-          b2: editing.sides.B[1] ?? "",
+          a1: editableSlotValue(editing.sides.A[0], "A", 0),
+          a2: editableSlotValue(editing.sides.A[1], "A", 1),
+          b1: editableSlotValue(editing.sides.B[0], "B", 0),
+          b2: editableSlotValue(editing.sides.B[1], "B", 1),
         }
       : { a1: loggerId ?? "", a2: "", b1: "", b2: "" },
   );
@@ -113,11 +139,17 @@ export function MatchForm({
     return keys.slice(0, doubles ? 2 : 1);
   }
   const activeSlots = [...slotsFor("A"), ...slotsFor("B")];
-  const sideIds = (side: Side) => slotsFor(side).map((slot) => slots[slot]);
-  const nameOf = (id: string) => roster.find((p) => p.id === id)?.name;
+  const sideValues = (side: Side) =>
+    slotsFor(side).map((slot) => slots[slot]);
+  const sideParticipants = (side: Side): MatchParticipant[] =>
+    sideValues(side).map(
+      (value) => guestBySlotValue.get(value) ?? playerParticipant(value),
+    );
+  const nameOf = (id: string) =>
+    pickerOptions.find((participant) => participant.id === id)?.name;
 
   function sideLabel(side: Side): string {
-    const names = sideIds(side)
+    const names = sideValues(side)
       .map((id) => nameOf(id))
       .filter(Boolean);
     return names.length > 0 ? names.join(" & ") : `Side ${side}`;
@@ -148,7 +180,10 @@ export function MatchForm({
       const payload = {
         id: editing ? editing.id : uuidv7(),
         playedAt: new Date(playedAt).toISOString(),
-        sides: { A: sideIds("A"), B: sideIds("B") },
+        sides: {
+          A: sideParticipants("A"),
+          B: sideParticipants("B"),
+        },
         winnerSide: winner,
         sets: parsedSets,
       };
@@ -164,8 +199,8 @@ export function MatchForm({
           // the stuck card still has to name whose match it is.
           ownerPlayerName: (loggerId ? nameOf(loggerId) : null) ?? "You",
           names: {
-            A: sideIds("A").map((id) => nameOf(id) ?? "Unknown"),
-            B: sideIds("B").map((id) => nameOf(id) ?? "Unknown"),
+            A: sideValues("A").map((id) => nameOf(id) ?? "Unknown"),
+            B: sideValues("B").map((id) => nameOf(id) ?? "Unknown"),
           },
           queuedAt: new Date().toISOString(),
         });
@@ -282,7 +317,7 @@ export function MatchForm({
                 key={slot}
                 value={slots[slot]}
                 onChange={(id) => setSlots((s) => ({ ...s, [slot]: id }))}
-                options={roster.filter(
+                options={pickerOptions.filter(
                   (p) =>
                     p.id === slots[slot] ||
                     !Object.values(slots).includes(p.id),
@@ -459,6 +494,10 @@ export function MatchForm({
       </Button>
     </div>
   );
+}
+
+function guestSlotValue(side: Side, index: number): string {
+  return `guest:${side}:${index}`;
 }
 
 function PlayerSelect({

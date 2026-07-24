@@ -6,27 +6,46 @@
 // formula and stated here as independent literals (not re-derived from the
 // engine), so a formula change shows up as a test diff to be reviewed.
 
-import type { EngineMatch, GroupProjection, MatchSide, PlayerId } from "./engine";
+import type {
+  EngineMatch,
+  EngineParticipant,
+  EngineSetScore,
+  GroupProjection,
+  MatchSide,
+  PlayerId,
+} from "./engine";
+
+export const player = (playerId: PlayerId): EngineParticipant => ({
+  kind: "player",
+  playerId,
+});
+
+export const guest = (name: string): EngineParticipant => ({
+  kind: "guest",
+  name,
+});
 
 /** Build a competitive simple-result singles/doubles match with sane defaults. */
 export function match(input: {
   id: string;
-  playedAt: Date;
+  playedAt?: Date;
   loggedAt?: Date;
   a: PlayerId[];
   b: PlayerId[];
   winner: MatchSide;
   classification?: "competitive" | "casual";
   status?: EngineMatch["status"];
+  sets?: readonly EngineSetScore[] | null;
 }): EngineMatch {
   return {
     id: input.id,
-    playedAt: input.playedAt,
-    loggedAt: input.loggedAt ?? input.playedAt,
+    playedAt: input.playedAt ?? at(0),
+    loggedAt: input.loggedAt ?? input.playedAt ?? at(0),
     classification: input.classification ?? "competitive",
     status: input.status ?? "confirmed",
-    sides: { A: input.a, B: input.b },
+    sides: { A: input.a.map(player), B: input.b.map(player) },
     winnerSide: input.winner,
+    sets: input.sets ?? null,
   };
 }
 
@@ -34,55 +53,6 @@ function at(minute: number): Date {
   // Fixed epoch base — pure, no clock read.
   return new Date(Date.UTC(2026, 0, 1, 0, minute, 0));
 }
-
-// ── Tier 1: golden masters ───────────────────────────────────────────────────
-
-/**
- * Golden A — the canonical single singles match required by issue 03. Two fresh
- * Players at 1000; A wins. E = 0.5 each, K=32 → delta ±16. Exact, trivially
- * hand-checkable.
- */
-export const goldenSinglesSingleMatch = {
-  log: [match({ id: "m1", playedAt: at(0), a: ["p1"], b: ["p2"], winner: "A" })],
-  expected: {
-    current: {
-      p1: { rating: 1016, matches: 1 },
-      p2: { rating: 984, matches: 1 },
-    },
-    history: [
-      { matchId: "m1", playerId: "p1", before: 1000, delta: 16, after: 1016, winProb: 0.5 },
-      { matchId: "m1", playerId: "p2", before: 1000, delta: -16, after: 984, winProb: 0.5 },
-    ],
-  },
-};
-
-/**
- * Golden B — a two-match singles log that actually exercises the 400-divisor
- * logistic (the symmetric case above cannot). Both start 1000.
- *   m1: p1 beats p2          → p1 1016, p2 984
- *   m2: p2 beats p1 (upset)  → E_p2 = 1/(1+10^(32/400)) = 0.45407808
- *       delta = 32*(1-0.45407808) = 17.46950153
- *       → p2 1001.469502, p1 998.530498
- * Expected values are independent hand computations to 6 dp.
- */
-export const goldenSinglesUpset = {
-  log: [
-    match({ id: "m1", playedAt: at(0), a: ["p1"], b: ["p2"], winner: "A" }),
-    match({ id: "m2", playedAt: at(1), a: ["p2"], b: ["p1"], winner: "A" }),
-  ],
-  expected: {
-    current: {
-      p1: { rating: 998.530498, matches: 2 },
-      p2: { rating: 1001.469502, matches: 2 },
-    },
-    m2: {
-      expectedWinner: 0.454078, // E for p2's side, pre-match
-      delta: 17.469502,
-    },
-  },
-};
-
-// ── Tier 2: seeded generator + canonical serializer ──────────────────────────
 
 /** Deterministic PRNG (mulberry32) so a failing property case is reproducible. */
 function mulberry32(seed: number): () => number {

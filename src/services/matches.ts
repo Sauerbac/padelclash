@@ -20,6 +20,19 @@ import {
   type PlayerId,
 } from "../domain/rating/engine";
 import { canModifyMatch, type MatchActor } from "../domain/edit-rights";
+import {
+  normalizeGuestParticipant,
+  type MatchParticipant,
+  type NormalizedGuestParticipant,
+  type PlayerParticipant,
+} from "../domain/match-participant";
+
+export class MatchValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MatchValidationError";
+  }
+}
 
 export interface LogMatchInput {
   /** Client-generated UUIDv7 — the offline-sync idempotency key. */
@@ -27,8 +40,8 @@ export interface LogMatchInput {
   playedAt: Date;
   /** The Logger: the player bound to the logging device. */
   loggedBy: string;
-  /** Player ids per Side — the engine's own shape, used end-to-end. */
-  sides: Record<MatchSide, string[]>;
+  /** Discriminated Player/Guest participants per Side. */
+  sides: Record<MatchSide, MatchParticipant[]>;
   winnerSide: MatchSide;
   /** Set Score detail; omit for a Simple Result. */
   sets?: SetScore[] | null;
@@ -56,7 +69,7 @@ export async function logMatch(
   input: LogMatchInput,
 ): Promise<LoggedMatch> {
   validateSides(input.sides);
-  validateSets(input.sets ?? null);
+  validateSets(input.sets ?? null, input.winnerSide);
   return db.transaction(async (tx) => {
     // Writers must run one at a time: under READ COMMITTED, two concurrent
     // logs would each replay a log missing the other's match, and the second
@@ -91,15 +104,10 @@ export async function logMatch(
       };
     }
 
-    await tx.insert(matchParticipants).values(
-      (["A", "B"] as const).flatMap((side) =>
-        input.sides[side].map((playerId) => ({
-          matchId: match.id,
-          playerId,
-          side,
-        })),
-      ),
-    );
+    const normalizedSides = await validateParticipants(tx, input.sides);
+    await tx
+      .insert(matchParticipants)
+      .values(participantInsertRows(match.id, normalizedSides));
 
     await replayProjections(tx);
 
@@ -115,7 +123,7 @@ export interface EditMatchInput {
   /** Id of the match being corrected. */
   id: string;
   playedAt: Date;
-  sides: Record<MatchSide, string[]>;
+  sides: Record<MatchSide, MatchParticipant[]>;
   winnerSide: MatchSide;
   sets?: SetScore[] | null;
 }
@@ -139,12 +147,13 @@ export async function editMatch(
   now: Date = new Date(),
 ): Promise<EditedMatch> {
   validateSides(input.sides);
-  validateSets(input.sets ?? null);
+  validateSets(input.sets ?? null, input.winnerSide);
   return db.transaction(async (tx) => {
     // Same writer serialization as logMatch (see there).
     await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
 
     await requireModifiableMatch(tx, input.id, actor, now, "edit");
+    const normalizedSides = await validateParticipants(tx, input.sides);
 
     const [match] = await tx
       .update(matches)
@@ -160,15 +169,9 @@ export async function editMatch(
     await tx
       .delete(matchParticipants)
       .where(eq(matchParticipants.matchId, input.id));
-    await tx.insert(matchParticipants).values(
-      (["A", "B"] as const).flatMap((side) =>
-        input.sides[side].map((playerId) => ({
-          matchId: input.id,
-          playerId,
-          side,
-        })),
-      ),
-    );
+    await tx
+      .insert(matchParticipants)
+      .values(participantInsertRows(input.id, normalizedSides));
 
     await replayProjections(tx);
 
@@ -230,22 +233,41 @@ function deltasOf(tx: Db, matchId: string): Promise<RatingHistoryRow[]> {
 
 // Sides are 1v1 or 2v2, and a player appears on exactly one side, once
 // (spec "Match"). Checked before the transaction opens.
-function validateSides(sides: Record<MatchSide, string[]>): void {
+function validateSides(sides: Record<MatchSide, MatchParticipant[]>): void {
   if (sides.A.length !== sides.B.length) {
-    throw new Error("Sides must have the same number of players");
+    throw new MatchValidationError(
+      "Sides must have the same number of participants",
+    );
   }
   if (sides.A.length < 1 || sides.A.length > 2) {
-    throw new Error("Sides must have 1 (singles) or 2 (doubles) players");
+    throw new MatchValidationError(
+      "Sides must have 1 (singles) or 2 (doubles) participants",
+    );
   }
   const all = [...sides.A, ...sides.B];
-  if (new Set(all).size !== all.length) {
-    throw new Error("A player can appear on only one side, once");
+  const playerIds = all
+    .filter((participant): participant is PlayerParticipant => participant.kind === "player")
+    .map((participant) => participant.playerId);
+  if (new Set(playerIds).size !== playerIds.length) {
+    throw new MatchValidationError("A player can appear on only one side, once");
+  }
+  for (const side of ["A", "B"] as const) {
+    const guests = sides[side].filter((participant) => participant.kind === "guest");
+    const playersOnSide = sides[side].length - guests.length;
+    if (playersOnSide < 1 || guests.length > 1) {
+      throw new MatchValidationError(
+        "Every side must contain a Player and at most one Guest",
+      );
+    }
+  }
+  if (sides.A.length === 1 && all.some((participant) => participant.kind === "guest")) {
+    throw new MatchValidationError("Guests are doubles-only");
   }
 }
 
 // A Set Score is games per set, e.g. 6-4 (spec "Match"). Bounds are sanity
 // caps, not tennis rules — unusual scorelines are the players' business.
-function validateSets(sets: SetScore[] | null): void {
+function validateSets(sets: SetScore[] | null, winnerSide: MatchSide): void {
   if (sets === null) return;
   const valid =
     sets.length >= 1 &&
@@ -260,8 +282,112 @@ function validateSets(sets: SetScore[] | null): void {
         s.b <= 99,
     );
   if (!valid) {
-    throw new Error("Set scores must be 1-5 sets of games from 0 to 99");
+    throw new MatchValidationError(
+      "Set scores must be 1-5 sets of games from 0 to 99",
+    );
   }
+  const setWins = sets.reduce(
+    (wins, set) => {
+      if (set.a === set.b) {
+        throw new MatchValidationError("Every set must have a winner");
+      }
+      wins[set.a > set.b ? "A" : "B"]++;
+      return wins;
+    },
+    { A: 0, B: 0 },
+  );
+  if (setWins[winnerSide] <= setWins[winnerSide === "A" ? "B" : "A"]) {
+    throw new MatchValidationError(
+      "The declared Match winner must have won more sets",
+    );
+  }
+}
+
+type NormalizedParticipant = PlayerParticipant | NormalizedGuestParticipant;
+
+async function validateParticipants(
+  tx: Db,
+  sides: Record<MatchSide, MatchParticipant[]>,
+): Promise<Record<MatchSide, NormalizedParticipant[]>> {
+  const roster = await tx
+    .select({
+      id: players.id,
+      normalizedName: players.normalizedName,
+    })
+    .from(players);
+  const rosterById = new Map(roster.map((player) => [player.id, player]));
+  const reservedNames = new Set(roster.map((player) => player.normalizedName));
+  const guestNames = new Set<string>();
+
+  const normalizeSide = (side: MatchSide): NormalizedParticipant[] =>
+    sides[side].map((participant) => {
+      if (participant.kind === "player") {
+        if (
+          typeof participant.playerId !== "string" ||
+          !rosterById.has(participant.playerId)
+        ) {
+          throw new MatchValidationError(
+            "Every Player participant must exist on the roster",
+          );
+        }
+        return { kind: "player", playerId: participant.playerId };
+      }
+      if (participant.kind !== "guest" || typeof participant.name !== "string") {
+        throw new MatchValidationError("Invalid match participant");
+      }
+      let guest: NormalizedGuestParticipant;
+      try {
+        guest = normalizeGuestParticipant(participant);
+      } catch (error) {
+        throw new MatchValidationError((error as Error).message);
+      }
+      if (reservedNames.has(guest.normalizedName)) {
+        throw new MatchValidationError(
+          "A Guest Name cannot match any roster Player Name",
+        );
+      }
+      if (guestNames.has(guest.normalizedName)) {
+        throw new MatchValidationError(
+          "Participant names must be unique within a Match",
+        );
+      }
+      guestNames.add(guest.normalizedName);
+      return guest;
+    });
+
+  return { A: normalizeSide("A"), B: normalizeSide("B") };
+}
+
+function participantValues(participant: NormalizedParticipant): {
+  playerId: string | null;
+  guestName: string | null;
+  guestNormalizedName: string | null;
+} {
+  return participant.kind === "player"
+    ? {
+        playerId: participant.playerId,
+        guestName: null,
+        guestNormalizedName: null,
+      }
+    : {
+        playerId: null,
+        guestName: participant.name,
+        guestNormalizedName: participant.normalizedName,
+      };
+}
+
+function participantInsertRows(
+  matchId: string,
+  sides: Record<MatchSide, NormalizedParticipant[]>,
+) {
+  return (["A", "B"] as const).flatMap((side) =>
+    sides[side].map((participant, slot) => ({
+      matchId,
+      side,
+      slot,
+      ...participantValues(participant),
+    })),
+  );
 }
 
 export interface LeaderboardEntry {
@@ -307,6 +433,7 @@ export async function getLeaderboard(db: Db): Promise<LeaderboardEntry[]> {
 
   const record = new Map<string, { wins: number; losses: number }>();
   for (const r of results) {
+    if (r.playerId === null) continue;
     const tally = record.get(r.playerId) ?? { wins: 0, losses: 0 };
     if (r.side === r.winnerSide) tally.wins++;
     else tally.losses++;
@@ -352,8 +479,46 @@ function activeRankMap(
 
 export interface MatchWithSides {
   match: Match;
-  /** In side order (A first), with names so pickers can render retirees. */
-  participants: { playerId: string; name: string; side: MatchSide }[];
+  /** Complete participant list; Guests are plain match-scoped names. */
+  participants: MatchParticipantRead[];
+}
+
+export type MatchParticipantRead =
+  | {
+      kind: "player";
+      playerId: string;
+      name: string;
+      side: MatchSide;
+      slot: number;
+    }
+  | {
+      kind: "guest";
+      name: string;
+      side: MatchSide;
+      slot: number;
+    };
+
+function toParticipantRead(row: {
+  playerId: string | null;
+  playerName: string | null;
+  guestName: string | null;
+  side: MatchSide;
+  slot: number;
+}): MatchParticipantRead {
+  return row.playerId === null
+    ? {
+        kind: "guest",
+        name: row.guestName ?? "Unknown Guest",
+        side: row.side,
+        slot: row.slot,
+      }
+    : {
+        kind: "player",
+        playerId: row.playerId,
+        name: row.playerName ?? "Unknown",
+        side: row.side,
+        slot: row.slot,
+      };
 }
 
 // Ids arriving from URLs are junk until proven uuid — pg throws on the cast.
@@ -379,25 +544,26 @@ export async function getMatch(
   const participants = await db
     .select({
       playerId: matchParticipants.playerId,
-      name: players.name,
+      playerName: players.name,
+      guestName: matchParticipants.guestName,
       side: matchParticipants.side,
+      slot: matchParticipants.slot,
     })
     .from(matchParticipants)
-    .innerJoin(players, eq(matchParticipants.playerId, players.id))
+    .leftJoin(players, eq(matchParticipants.playerId, players.id))
     .where(eq(matchParticipants.matchId, matchId))
-    .orderBy(asc(matchParticipants.side));
+    .orderBy(asc(matchParticipants.side), asc(matchParticipants.slot));
 
-  return { match, participants };
+  return { match, participants: participants.map(toParticipantRead) };
 }
 
-export interface FeedParticipant {
-  playerId: string;
-  name: string;
-  side: MatchSide;
-  ratingBefore: number;
-  delta: number;
-  ratingAfter: number;
-}
+export type FeedParticipant =
+  | (Extract<MatchParticipantRead, { kind: "player" }> & {
+      ratingBefore: number;
+      delta: number;
+      ratingAfter: number;
+    })
+  | Extract<MatchParticipantRead, { kind: "guest" }>;
 
 export interface FeedMatch {
   id: string;
@@ -423,7 +589,7 @@ export interface FeedMatch {
  * their name in old matches.
  */
 export async function getFeed(db: Db): Promise<FeedMatch[]> {
-  const [matchRows, historyRows, roster] = await Promise.all([
+  const [matchRows, participantRows, historyRows, roster] = await Promise.all([
     db
       .select()
       .from(matches)
@@ -432,6 +598,7 @@ export async function getFeed(db: Db): Promise<FeedMatch[]> {
         desc(matches.loggedAt),
         desc(matches.id),
       ),
+    db.select().from(matchParticipants),
     db.select().from(ratingHistory),
     db.select().from(players),
   ]);
@@ -443,6 +610,12 @@ export async function getFeed(db: Db): Promise<FeedMatch[]> {
     rows.push(row);
     byMatch.set(row.matchId, rows);
   }
+  const participantsByMatch = new Map<string, typeof participantRows>();
+  for (const row of participantRows) {
+    const rows = participantsByMatch.get(row.matchId) ?? [];
+    rows.push(row);
+    participantsByMatch.set(row.matchId, rows);
+  }
 
   return matchRows.map((m) => ({
     id: m.id,
@@ -452,16 +625,36 @@ export async function getFeed(db: Db): Promise<FeedMatch[]> {
     loggedByName: nameById.get(m.loggedBy) ?? "Unknown",
     winnerSide: m.winnerSide,
     sets: m.sets,
-    participants: (byMatch.get(m.id) ?? [])
-      .sort((a, b) => a.side.localeCompare(b.side))
-      .map((row) => ({
-        playerId: row.playerId,
-        name: nameById.get(row.playerId) ?? "Unknown",
-        side: row.side,
-        ratingBefore: row.ratingBefore,
-        delta: row.delta,
-        ratingAfter: row.ratingAfter,
-      })),
+    participants: (participantsByMatch.get(m.id) ?? [])
+      .sort((a, b) => a.side.localeCompare(b.side) || a.slot - b.slot)
+      .map((participant): FeedParticipant => {
+        if (participant.playerId === null) {
+          return {
+            kind: "guest",
+            name: participant.guestName ?? "Unknown Guest",
+            side: participant.side,
+            slot: participant.slot,
+          };
+        }
+        const history = (byMatch.get(m.id) ?? []).find(
+          (row) => row.playerId === participant.playerId,
+        );
+        if (!history) {
+          throw new Error(
+            `Missing Rating history for Player ${participant.playerId} in Match ${m.id}`,
+          );
+        }
+        return {
+          kind: "player",
+          playerId: participant.playerId,
+          name: nameById.get(participant.playerId) ?? "Unknown",
+          side: participant.side,
+          slot: participant.slot,
+          ratingBefore: history.ratingBefore,
+          delta: history.delta,
+          ratingAfter: history.ratingAfter,
+        };
+      }),
   }));
 }
 
@@ -525,11 +718,14 @@ export async function getPlayerDetail(
 
   // The player's own matches, newest first (feed order).
   const played = feed.filter((m) =>
-    m.participants.some((p) => p.playerId === playerId),
+    m.participants.some((p) => p.kind === "player" && p.playerId === playerId),
   );
   const wins = played.filter((m) =>
     m.participants.some(
-      (p) => p.playerId === playerId && p.side === m.winnerSide,
+      (p) =>
+        p.kind === "player" &&
+        p.playerId === playerId &&
+        p.side === m.winnerSide,
     ),
   ).length;
 
@@ -549,7 +745,9 @@ export async function getPlayerDetail(
     // is exactly chronological — late-synced matches sit where they belong.
     ratingSeries: played
       .map((m) => {
-        const me = m.participants.find((p) => p.playerId === playerId)!;
+        const me = m.participants.find(
+          (p) => p.kind === "player" && p.playerId === playerId,
+        ) as Extract<FeedParticipant, { kind: "player" }>;
         return {
           matchId: m.id,
           playedAt: m.playedAt,
@@ -575,13 +773,19 @@ function companionRecords(
   const records = new Map<string, CompanionRecord>();
   for (const match of played) {
     const mySide = match.participants.find(
-      (p) => p.playerId === playerId,
+      (p) => p.kind === "player" && p.playerId === playerId,
     )!.side;
     const won = mySide === match.winnerSide;
-    const companions = match.participants.filter((p) =>
-      relation === "opposite"
-        ? p.side !== mySide
-        : p.side === mySide && p.playerId !== playerId,
+    const companions = match.participants.filter(
+      (participant): participant is Extract<
+        FeedParticipant,
+        { kind: "player" }
+      > =>
+        participant.kind === "player" &&
+        (relation === "opposite"
+          ? participant.side !== mySide
+          : participant.side === mySide &&
+            participant.playerId !== playerId),
     );
     for (const c of companions) {
       const record = records.get(c.playerId) ?? {
@@ -605,16 +809,59 @@ function companionRecords(
  * Replay the full match log through the pure engine and rewrite both
  * projection tables. Must run inside the transaction that changed the log.
  */
+export async function rebuildRatingProjections(db: Db): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
+    await replayProjections(tx);
+  });
+}
+
+/**
+ * Rollout guard for decision 106. Run after schema migration and before the
+ * historical replay so a newly-added contradictory Set Score fails loudly
+ * instead of silently receiving a dominance multiplier.
+ */
+export async function ratingRolloutPreflight(
+  db: Db,
+): Promise<{ matches: number; scoredMatches: number }> {
+  const rows = await db
+    .select({
+      id: matches.id,
+      winnerSide: matches.winnerSide,
+      sets: matches.sets,
+    })
+    .from(matches);
+  let scoredMatches = 0;
+  for (const match of rows) {
+    if (match.sets !== null) scoredMatches++;
+    try {
+      validateSets(match.sets, match.winnerSide);
+    } catch (error) {
+      throw new Error(
+        `Rating rollout preflight failed for Match ${match.id}: ${(error as Error).message}`,
+      );
+    }
+  }
+  return { matches: rows.length, scoredMatches };
+}
+
 async function replayProjections(tx: Db): Promise<void> {
   const [matchRows, participantRows] = await Promise.all([
     tx.select().from(matches),
     tx.select().from(matchParticipants),
   ]);
 
-  const sidesByMatch = new Map<string, Record<MatchSide, string[]>>();
+  const sidesByMatch = new Map<
+    string,
+    Record<MatchSide, MatchParticipant[]>
+  >();
   for (const p of participantRows) {
     const sides = sidesByMatch.get(p.matchId) ?? { A: [], B: [] };
-    sides[p.side].push(p.playerId);
+    sides[p.side].push(
+      p.playerId === null
+        ? { kind: "guest", name: p.guestName ?? "Unknown Guest" }
+        : { kind: "player", playerId: p.playerId },
+    );
     sidesByMatch.set(p.matchId, sides);
   }
 
@@ -627,6 +874,7 @@ async function replayProjections(tx: Db): Promise<void> {
     status: "confirmed",
     sides: sidesByMatch.get(m.id) ?? { A: [], B: [] },
     winnerSide: m.winnerSide,
+    sets: m.sets,
   }));
 
   const projection = projectGroup(engineMatches);

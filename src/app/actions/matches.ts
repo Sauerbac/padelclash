@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import type { MatchSide } from "@/domain/rating/engine";
+import type { MatchParticipant } from "@/domain/match-participant";
+export type { MatchParticipant } from "@/domain/match-participant";
 import type { MatchSyncRefusal } from "@/domain/sync-policy";
 import { UUIDV7_PATTERN } from "@/lib/uuidv7";
 import { currentActor } from "@/services/auth/actor";
@@ -11,7 +13,12 @@ import { clientIp } from "@/services/auth/client-ip";
 import { getDb } from "@/services/db";
 import type { RatingHistoryRow, SetScore } from "@/services/db/schema";
 import { AccessDeniedError } from "@/services/errors";
-import { deleteMatch, editMatch, logMatch } from "@/services/matches";
+import {
+  deleteMatch,
+  editMatch,
+  logMatch,
+  MatchValidationError,
+} from "@/services/matches";
 import { listPlayers } from "@/services/players";
 import { matchMutationLimiter } from "@/services/rate-limit";
 
@@ -21,8 +28,8 @@ export interface MatchPayload {
   id: string;
   /** ISO timestamp of when the match was played. */
   playedAt: string;
-  /** Player ids per Side. */
-  sides: Record<MatchSide, string[]>;
+  /** Discriminated Player/Guest participants per Side. */
+  sides: Record<MatchSide, MatchParticipant[]>;
   winnerSide: MatchSide;
   /** Set Score detail; null for a Simple Result. */
   sets: SetScore[] | null;
@@ -173,7 +180,11 @@ export async function editMatchAction(
       await currentActor(),
     );
   } catch (err) {
-    return { ok: false, code: "not-allowed", error: (err as Error).message };
+    return {
+      ok: false,
+      code: err instanceof MatchValidationError ? "invalid" : "not-allowed",
+      error: (err as Error).message,
+    };
   }
 
   await refreshBindingCookie();

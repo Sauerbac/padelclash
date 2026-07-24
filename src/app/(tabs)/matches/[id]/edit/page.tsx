@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canModifyMatch } from "@/domain/edit-rights";
+import {
+  guestParticipant,
+  playerParticipant,
+  type MatchParticipant,
+} from "@/domain/match-participant";
 import { MatchForm } from "@/components/match-form";
 import { NotJoined } from "@/components/not-joined";
 import { PageHeader } from "@/components/page-header";
@@ -59,11 +64,18 @@ export default async function EditMatchPage({
   // if they have since retired — their slot must still render.
   const options = new Map(roster.map(({ id, name }) => [id, name]));
   for (const p of participants) {
+    if (p.kind === "guest") continue;
     if (!options.has(p.playerId)) options.set(p.playerId, p.name);
   }
 
-  const sides = { A: [] as string[], B: [] as string[] };
-  for (const p of participants) sides[p.side].push(p.playerId);
+  const sides: Record<"A" | "B", MatchParticipant[]> = { A: [], B: [] };
+  for (const p of participants) {
+    sides[p.side].push(
+      p.kind === "player"
+        ? playerParticipant(p.playerId)
+        : guestParticipant(p.name),
+    );
+  }
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">

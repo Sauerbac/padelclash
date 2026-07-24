@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { listQueuedMatches } from "./queue";
+import { enqueueMatch, listQueuedMatches } from "./queue";
+import { guestParticipant, playerParticipant } from "../../domain/match-participant";
 import {
   clearOfflineMatchSnapshot,
   createOfflineMatchSnapshot,
@@ -12,6 +13,10 @@ beforeEach(() => {
   Object.defineProperty(globalThis, "indexedDB", {
     configurable: true,
     value: new IDBFactory(),
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: new EventTarget(),
   });
 });
 
@@ -71,5 +76,37 @@ describe("offline Match-entry snapshot", () => {
 
     await clearOfflineMatchSnapshot();
     expect(await loadOfflineMatchSnapshot()).toBeNull();
+  });
+
+  it("round-trips the discriminated Player/Guest payload unchanged", async () => {
+    await enqueueMatch({
+      id: "01900000-0000-7000-8000-000000000001",
+      playedAt: "2026-07-22T12:00:00.000Z",
+      ownerPlayerId: "player-1",
+      ownerPlayerName: "Alex",
+      sides: {
+        A: [playerParticipant("player-1"), guestParticipant("Visiting Pat")],
+        B: [playerParticipant("player-2"), playerParticipant("player-3")],
+      },
+      names: {
+        A: ["Alex", "Visiting Pat"],
+        B: ["Blair", "Casey"],
+      },
+      winnerSide: "A",
+      sets: null,
+      queuedAt: "2026-07-22T12:01:00.000Z",
+    });
+
+    const [queued] = await listQueuedMatches();
+    expect(queued.sides).toEqual({
+      A: [
+        { kind: "player", playerId: "player-1" },
+        { kind: "guest", name: "Visiting Pat" },
+      ],
+      B: [
+        { kind: "player", playerId: "player-2" },
+        { kind: "player", playerId: "player-3" },
+      ],
+    });
   });
 });

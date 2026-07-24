@@ -59,11 +59,15 @@ export function MatchCard({
       {sets && <SetsRow sets={sets} />}
 
       <div className="flex flex-wrap gap-1.5">
-        {[...winners, ...losers].map((p) => (
+        {[...winners, ...losers]
+          .filter(
+            (participant) => participant.kind === "player",
+          )
+          .map((p) => (
           <DeltaBadge key={p.playerId} delta={p.delta}>
             {p.name}{" "}
           </DeltaBadge>
-        ))}
+          ))}
       </div>
 
       {showLogger && (

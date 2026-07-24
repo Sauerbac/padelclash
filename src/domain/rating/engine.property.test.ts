@@ -1,74 +1,92 @@
-// Property tests: hold over any random valid log. A seeded generator keeps
-// failures reproducible without pulling in a property-testing dependency.
-// Several seeds stand in for "any log".
-
 import { describe, expect, it } from "vitest";
-import { projectGroup } from "./engine";
-import { randomSinglesLog, serializeProjection, shuffle } from "./fixtures";
+import { projectGroup, replayMatch, type PlayerState } from "./engine";
+import {
+  guest,
+  match,
+  player,
+  randomSinglesLog,
+  serializeProjection,
+  shuffle,
+} from "./fixtures";
 
 const SEEDS = [1, 2, 7, 42, 1337, 99999];
 
-describe("determinism — same log yields byte-identical projection", () => {
-  it.each(SEEDS)("seed %i", (seed) => {
-    const log = randomSinglesLog(seed);
-    expect(serializeProjection(projectGroup(log))).toBe(
-      serializeProjection(projectGroup(log)),
-    );
-  });
-});
-
-describe("insertion-order independence — any order yields identical projection", () => {
-  it.each(SEEDS)("seed %i", (seed) => {
+describe("replay invariants", () => {
+  it.each(SEEDS)("is deterministic and insertion-order independent for seed %i", (seed) => {
     const log = randomSinglesLog(seed);
     const reference = serializeProjection(projectGroup(log));
-    // Three independent shuffles of the same log must all project identically.
-    for (const s of [seed + 1, seed * 3 + 5, seed ^ 0x5a5a]) {
-      expect(serializeProjection(projectGroup(shuffle(log, s)))).toBe(reference);
-    }
+    expect(serializeProjection(projectGroup(log))).toBe(reference);
+    expect(serializeProjection(projectGroup(shuffle(log, seed + 11)))).toBe(reference);
   });
-});
 
-describe("per-match conservation — deltas across both Sides sum to zero", () => {
-  it.each(SEEDS)("seed %i", (seed) => {
-    const { ratingHistory } = projectGroup(randomSinglesLog(seed));
-    const byMatch = new Map<string, number>();
-    for (const r of ratingHistory) {
-      byMatch.set(r.matchId, (byMatch.get(r.matchId) ?? 0) + r.delta);
-    }
-    expect(byMatch.size).toBeGreaterThan(0);
-    for (const sum of byMatch.values()) {
-      expect(sum).toBeCloseTo(0, 10);
-    }
-  });
-});
-
-describe("idempotent rebuild — replaying twice yields identical rows", () => {
-  it.each(SEEDS)("seed %i", (seed) => {
+  it.each(SEEDS)("always emits signed integer changes in the range 1…50 for seed %i", (seed) => {
     const log = randomSinglesLog(seed);
-    // A fresh from-scratch projection of an already-projected log must match:
-    // there is no snapshot that could drift.
-    const once = serializeProjection(projectGroup(log));
-    const twice = serializeProjection(projectGroup(log.slice()));
-    expect(twice).toBe(once);
+    const winnerByMatch = new Map(log.map((entry) => [entry.id, entry.winnerSide]));
+    const { ratingHistory } = projectGroup(log);
+    for (const row of ratingHistory) {
+      expect(Number.isInteger(row.delta)).toBe(true);
+      expect(Math.abs(row.delta)).toBeGreaterThanOrEqual(1);
+      expect(Math.abs(row.delta)).toBeLessThanOrEqual(50);
+      expect(row.side === winnerByMatch.get(row.matchId) ? row.delta : -row.delta).toBeGreaterThan(0);
+      expect(row.ratingAfter).toBe(row.ratingBefore + row.delta);
+    }
   });
-});
 
-describe("non-competitive and voided matches are excluded from the stream", () => {
-  it("a casual or voided match does not move ratings", () => {
+  it("uses one immutable snapshot regardless of participant iteration order", () => {
+    const state = (rating: number): PlayerState => ({
+      rating,
+      competitiveMatchesPlayed: 3,
+      matchesSinceReset: 3,
+    });
+    const prior = new Map([
+      ["p1", state(800)],
+      ["p2", state(1200)],
+      ["p3", state(900)],
+      ["p4", state(1100)],
+    ]);
+    const base = match({
+      id: "ordered",
+      a: ["p1", "p2"],
+      b: ["p3", "p4"],
+      winner: "A",
+    });
+    const reversed = {
+      ...base,
+      sides: {
+        A: [...base.sides.A].reverse(),
+        B: [...base.sides.B].reverse(),
+      },
+    };
+    const canonical = (outputs: ReturnType<typeof replayMatch>["outputs"]) =>
+      outputs.map((row) => [row.playerId, row.delta]).sort();
+    expect(canonical(replayMatch(prior, reversed).outputs)).toEqual(
+      canonical(replayMatch(prior, base).outputs),
+    );
+  });
+
+  it("uses the same hidden rating for two opposing Guests", () => {
+    const prior = new Map([
+      ["p1", { rating: 800, competitiveMatchesPlayed: 3, matchesSinceReset: 3 }],
+      ["p2", { rating: 1200, competitiveMatchesPlayed: 3, matchesSinceReset: 3 }],
+    ]);
+    const result = replayMatch(prior, {
+      ...match({ id: "two-guests", a: [], b: [], winner: "A" }),
+      sides: {
+        A: [player("p1"), guest("One")],
+        B: [player("p2"), guest("Two")],
+      },
+    });
+    expect(result.outputs.map((row) => row.delta)).toEqual([42, -42]);
+  });
+
+  it("filters casual and voided matches from replay", () => {
     const base = randomSinglesLog(3, 4, 10);
-    const ratings = (log: ReturnType<typeof randomSinglesLog>) =>
-      serializeProjection(projectGroup(log));
-    const withCasual = base.concat({
-      ...base[0],
-      id: "casual1",
-      classification: "casual",
-    });
-    const withVoided = base.concat({
-      ...base[0],
-      id: "voided1",
-      status: "voided",
-    });
-    expect(ratings(withCasual)).toBe(ratings(base));
-    expect(ratings(withVoided)).toBe(ratings(base));
+    const reference = serializeProjection(projectGroup(base));
+    expect(
+      serializeProjection(projectGroup(base.concat({ ...base[0], id: "casual", classification: "casual" }))),
+    ).toBe(reference);
+    expect(
+      serializeProjection(projectGroup(base.concat({ ...base[0], id: "voided", status: "voided" }))),
+    ).toBe(reference);
   });
 });

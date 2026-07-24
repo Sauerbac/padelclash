@@ -9,6 +9,11 @@ import fs from "node:fs";
 import os from "node:os";
 import { hasDatabase } from "./test-db";
 import { migrationsFolder } from "./migrate";
+import type { Db } from "./index";
+import {
+  ratingRolloutPreflight,
+  rebuildRatingProjections,
+} from "../matches";
 
 /**
  * The secure cutover of spec decision 55, exercised the only way that proves
@@ -165,5 +170,121 @@ describe.skipIf(!hasDatabase)("secure onboarding migration", () => {
         sql`insert into players (name, normalized_name) values ('ALEX', 'alex')`,
       ),
     ).rejects.toThrow();
+  });
+
+  it("migrates Player participants, then replays all historical Ratings", async () => {
+    const { rows: roster } = (await db.execute(sql`
+      select id, normalized_name from players
+       where normalized_name in ('simon', 'alex')
+       order by normalized_name
+    `)) as unknown as {
+      rows: { id: string; normalized_name: string }[];
+    };
+    const alex = roster.find((row) => row.normalized_name === "alex")!;
+    const simon = roster.find((row) => row.normalized_name === "simon")!;
+    const matchId = "019c1234-5678-7000-8000-000000000001";
+
+    await db.execute(sql`
+      insert into matches (id, played_at, logged_by, winner_side)
+      values (${matchId}, '2026-07-20T18:00:00Z', ${simon.id}, 'A')
+    `);
+    await db.execute(sql`
+      insert into match_participants (match_id, player_id, side) values
+        (${matchId}, ${simon.id}, 'A'),
+        (${matchId}, ${alex.id}, 'B')
+    `);
+    await db.execute(sql`
+      insert into rating_history
+        (match_id, player_id, side, rating_before, delta, rating_after,
+         was_provisional, win_probability, played_at)
+      values
+        (${matchId}, ${simon.id}, 'A', 1000, 16, 1016, false, 0.5, '2026-07-20T18:00:00Z'),
+        (${matchId}, ${alex.id}, 'B', 1000, -16, 984, false, 0.5, '2026-07-20T18:00:00Z')
+    `);
+    await db.execute(sql`
+      insert into current_rating
+        (player_id, rating, competitive_matches_played, matches_since_reset,
+         is_provisional, is_ranked, last_match_at)
+      values
+        (${simon.id}, 1016, 1, 1, false, false, '2026-07-20T18:00:00Z'),
+        (${alex.id}, 984, 1, 1, false, false, '2026-07-20T18:00:00Z')
+    `);
+
+    await migrateThrough("0005_rating_guests");
+
+    const migrated = (await db.execute(sql`
+      select player_id, guest_name, guest_normalized_name, side, slot
+        from match_participants
+       where match_id = ${matchId}
+       order by side, slot
+    `)) as unknown as {
+      rows: {
+        player_id: string | null;
+        guest_name: string | null;
+        guest_normalized_name: string | null;
+        side: "A" | "B";
+        slot: number;
+      }[];
+    };
+    expect(migrated.rows).toEqual([
+      {
+        player_id: simon.id,
+        guest_name: null,
+        guest_normalized_name: null,
+        side: "A",
+        slot: 0,
+      },
+      {
+        player_id: alex.id,
+        guest_name: null,
+        guest_normalized_name: null,
+        side: "B",
+        slot: 0,
+      },
+    ]);
+
+    const typedDb = db as unknown as Db;
+    expect(await ratingRolloutPreflight(typedDb)).toEqual({
+      matches: 1,
+      scoredMatches: 0,
+    });
+    await rebuildRatingProjections(typedDb);
+
+    const projection = (await db.execute(sql`
+      select player_id, rating, competitive_matches_played, is_provisional
+        from current_rating
+       where player_id in (${simon.id}, ${alex.id})
+       order by rating desc
+    `)) as unknown as {
+      rows: {
+        player_id: string;
+        rating: number;
+        competitive_matches_played: number;
+        is_provisional: boolean;
+      }[];
+    };
+    expect(projection.rows).toEqual([
+      {
+        player_id: simon.id,
+        rating: 1050,
+        competitive_matches_played: 1,
+        is_provisional: true,
+      },
+      {
+        player_id: alex.id,
+        rating: 950,
+        competitive_matches_played: 1,
+        is_provisional: true,
+      },
+    ]);
+
+    await db.execute(sql`
+      update matches
+         set sets = '[{"a":6,"b":4},{"a":3,"b":6},{"a":4,"b":6}]'::jsonb
+       where id = ${matchId}
+    `);
+    await expect(ratingRolloutPreflight(typedDb)).rejects.toThrow(
+      new RegExp(matchId),
+    );
   });
 });

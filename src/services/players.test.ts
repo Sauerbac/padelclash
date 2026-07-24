@@ -7,6 +7,7 @@ import {
 } from "./db/test-db";
 import type { Db } from "./db";
 import { uuidv7 } from "../lib/uuidv7";
+import { playerParticipant as player } from "../domain/match-participant";
 import { createBinding, resolveCredential } from "./access";
 import { PlayerNameError, PlayerReferencedError } from "./errors";
 import { logMatch } from "./matches";
@@ -211,7 +212,7 @@ describe.skipIf(!hasDatabase)("player deletion", () => {
       id: matchId,
       playedAt: new Date(),
       loggedBy: simon.id,
-      sides: { A: [simon.id], B: [alex.id] },
+      sides: { A: [player(simon.id)], B: [player(alex.id)] },
       winnerSide: "A",
     });
 
@@ -238,7 +239,7 @@ describe.skipIf(!hasDatabase)("player deletion", () => {
       id: uuidv7(),
       playedAt: new Date(),
       loggedBy: logger.id,
-      sides: { A: [a.id], B: [b.id] },
+      sides: { A: [player(a.id)], B: [player(b.id)] },
       winnerSide: "A",
     });
 

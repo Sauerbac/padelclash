@@ -160,12 +160,27 @@ export const matchParticipants = pgTable(
     matchId: uuid("match_id")
       .notNull()
       .references(() => matches.id, { onDelete: "cascade" }),
-    playerId: uuid("player_id")
-      .notNull()
-      .references(() => players.id),
+    // Exactly one identity variant is present (check below).
+    playerId: uuid("player_id").references(() => players.id),
+    guestName: text("guest_name"),
+    guestNormalizedName: text("guest_normalized_name"),
     side: matchSide("side").notNull(),
+    slot: integer("slot").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.matchId, t.playerId] })],
+  (t) => [
+    primaryKey({ columns: [t.matchId, t.side, t.slot] }),
+    check(
+      "match_participants_exactly_one_identity",
+      sql`(${t.playerId} is not null and ${t.guestName} is null and ${t.guestNormalizedName} is null)
+          or (${t.playerId} is null and ${t.guestName} is not null and ${t.guestNormalizedName} is not null)`,
+    ),
+    uniqueIndex("match_participants_one_player_per_match")
+      .on(t.matchId, t.playerId)
+      .where(sql`player_id is not null`),
+    uniqueIndex("match_participants_one_guest_name_per_match")
+      .on(t.matchId, t.guestNormalizedName)
+      .where(sql`guest_normalized_name is not null`),
+  ],
 );
 
 // ---- Projections (derived, rewritten wholesale on every log change) --------
@@ -182,11 +197,11 @@ export const ratingHistory = pgTable(
       .notNull()
       .references(() => players.id),
     side: matchSide("side").notNull(),
-    ratingBefore: doublePrecision("rating_before").notNull(),
-    delta: doublePrecision("delta").notNull(),
-    ratingAfter: doublePrecision("rating_after").notNull(),
+    ratingBefore: integer("rating_before").notNull(),
+    delta: integer("delta").notNull(),
+    ratingAfter: integer("rating_after").notNull(),
     wasProvisional: boolean("was_provisional").notNull(),
-    winProbability: doublePrecision("win_probability").notNull(),
+    expectedScore: doublePrecision("expected_score").notNull(),
     playedAt: timestamp("played_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.matchId, t.playerId] })],
@@ -196,7 +211,7 @@ export const currentRating = pgTable("current_rating", {
   playerId: uuid("player_id")
     .primaryKey()
     .references(() => players.id),
-  rating: doublePrecision("rating").notNull(),
+  rating: integer("rating").notNull(),
   competitiveMatchesPlayed: integer("competitive_matches_played").notNull(),
   matchesSinceReset: integer("matches_since_reset").notNull(),
   isProvisional: boolean("is_provisional").notNull(),
