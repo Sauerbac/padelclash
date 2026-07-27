@@ -101,14 +101,27 @@ describe("rating acceptance anchors", () => {
     expect(loss.outputs.map((row) => row.delta)).toEqual([25, 25, -12, -38]);
   });
 
-  it("caps equal provisional players at 50 with or without a score", () => {
-    for (const sets of [null, [{ a: 6, b: 0 }, { a: 6, b: 0 }]]) {
-      const result = projectGroup([
-        match({ id: `m-${sets ? "score" : "simple"}`, a: ["a"], b: ["b"], winner: "A", sets }),
-      ]);
-      expect(result.ratingHistory.map((row) => row.delta)).toEqual([50, -50]);
-      expect(result.ratingHistory.every((row) => row.wasProvisional)).toBe(true);
-    }
+  it("moves equal provisional players by 35 for a Simple Result", () => {
+    const result = projectGroup([
+      match({ id: "provisional-simple", a: ["a"], b: ["b"], winner: "A" }),
+    ]);
+
+    expect(result.ratingHistory.map((row) => row.delta)).toEqual([35, -35]);
+    expect(result.ratingHistory.every((row) => row.wasProvisional)).toBe(true);
+  });
+
+  it("moves equal provisional players by 49 for a shutout", () => {
+    const result = projectGroup([
+      match({
+        id: "provisional-shutout",
+        a: ["a"],
+        b: ["b"],
+        winner: "A",
+        sets: [{ a: 6, b: 0 }, { a: 6, b: 0 }],
+      }),
+    ]);
+
+    expect(result.ratingHistory.map((row) => row.delta)).toEqual([49, -49]);
   });
 
   it("uses Provisional rules through Match three and Established rules on Match four", () => {
@@ -135,7 +148,7 @@ describe("rating acceptance anchors", () => {
       match({ id: "fourth", a: ["player"], b: ["opponent"], winner: "A" }),
     );
 
-    expect(third.outputs[0]).toMatchObject({ delta: 50, wasProvisional: true });
+    expect(third.outputs[0]).toMatchObject({ delta: 35, wasProvisional: true });
     expect(fourth.outputs[0]).toMatchObject({
       delta: 25,
       wasProvisional: false,
@@ -162,7 +175,7 @@ describe("rating acceptance anchors", () => {
         winner: "A",
       }),
     );
-    expect(result.outputs.map((row) => row.delta)).toEqual([25, -50]);
+    expect(result.outputs.map((row) => row.delta)).toEqual([25, -35]);
   });
 
   it("allows a lifetime Rating to cross below zero", () => {

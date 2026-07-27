@@ -266,13 +266,13 @@ describe.skipIf(!hasDatabase)("secure onboarding migration", () => {
     expect(projection.rows).toEqual([
       {
         player_id: simon.id,
-        rating: 1050,
+        rating: 1035,
         competitive_matches_played: 1,
         is_provisional: true,
       },
       {
         player_id: alex.id,
-        rating: 950,
+        rating: 965,
         competitive_matches_played: 1,
         is_provisional: true,
       },

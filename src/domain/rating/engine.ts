@@ -13,7 +13,7 @@ export type MatchSide = "A" | "B";
 
 export const STARTING_RATING = 1000;
 export const ESTABLISHED_K = 50;
-export const PROVISIONAL_K = 100;
+export const PROVISIONAL_K = 70;
 export const RATING_DIVISOR = 400;
 export const DEFAULT_RANKED_THRESHOLD = 3;
 export const MIN_CHANGE = 1;

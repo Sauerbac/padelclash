@@ -59,14 +59,14 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const result = await logMatch(db, singles(simon, alex));
 
     expect(result.alreadyLogged).toBe(false);
-    // Two fresh Provisional Players use K=100, so the cap yields ±50.
+    // Two fresh Provisional Players use K=70, so an even match yields ±35.
     const bySide = Object.fromEntries(result.deltas.map((d) => [d.side, d]));
     expect(bySide.A.playerId).toBe(simon.id);
-    expect(bySide.A.delta).toBe(50);
-    expect(bySide.A.ratingAfter).toBe(1050);
+    expect(bySide.A.delta).toBe(35);
+    expect(bySide.A.ratingAfter).toBe(1035);
     expect(bySide.B.playerId).toBe(alex.id);
-    expect(bySide.B.delta).toBe(-50);
-    expect(bySide.B.ratingAfter).toBe(950);
+    expect(bySide.B.delta).toBe(-35);
+    expect(bySide.B.ratingAfter).toBe(965);
   });
 
   it("a retried sync with the same id does not double-log", async () => {
@@ -78,12 +78,12 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(retry.match.id).toBe(input.id);
     // The stored payoff still comes back so a retried submit can render it.
     const bySide = Object.fromEntries(retry.deltas.map((d) => [d.side, d]));
-    expect(bySide.A.delta).toBe(50);
+    expect(bySide.A.delta).toBe(35);
 
     // Exactly one match logged: Alex's rating dropped once, not twice.
     const leaderboard = await getLeaderboard(db);
     const alexRow = leaderboard.find((e) => e.playerId === alex.id);
-    expect(alexRow?.rating).toBe(950);
+    expect(alexRow?.rating).toBe(965);
   });
 
   it("ranks players after 3 matches and reports W–L", async () => {
@@ -124,10 +124,10 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       winnerSide: "A",
     });
 
-    // Four fresh equal Provisional Players independently reach the ±50 cap.
+    // Four fresh equal Provisional Players independently move by ±35.
     expect(result.deltas).toHaveLength(4);
     for (const d of result.deltas) {
-      expect(d.delta).toBe(d.side === "A" ? 50 : -50);
+      expect(d.delta).toBe(d.side === "A" ? 35 : -35);
     }
   });
 
@@ -275,14 +275,14 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     await logMatch(db, singles(simon, alex, { playedAt: day2 }));
     await logMatch(db, singles(casey, simon, { playedAt: day1 }));
 
-    // Correct replay order (day 1 first): Casey reaches 1050 and Simon falls
-    // to 950, then Simon's win over Alex reaches the universal +50 cap.
+    // Correct replay order (day 1 first): Casey reaches 1035 and Simon falls
+    // to 965, then Simon gains 39 as an underdog against Alex.
     const byName = new Map(
       (await getLeaderboard(db)).map((e) => [e.name, e.rating]),
     );
-    expect(byName.get("Casey")).toBe(1050);
-    expect(byName.get("Simon")).toBe(1000);
-    expect(byName.get("Alex")).toBe(950);
+    expect(byName.get("Casey")).toBe(1035);
+    expect(byName.get("Simon")).toBe(1004);
+    expect(byName.get("Alex")).toBe(961);
   });
 
   it("stores set scores and returns them with the match", async () => {
@@ -394,7 +394,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(byName.get("Simon")?.matchesPlayed).toBe(0);
     expect(byName.get("Simon")?.rating).toBe(1000);
     expect(byName.get("Casey")?.matchesPlayed).toBe(1);
-    expect(byName.get("Casey")?.rating).toBe(1050);
+    expect(byName.get("Casey")?.rating).toBe(1035);
   });
 
   it("concurrent logs are serialized — both land in the projections", async () => {
@@ -428,8 +428,8 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     // ratings back at the single-match values.
     const byName = new Map((await getLeaderboard(db)).map((e) => [e.name, e]));
     expect(byName.get("Simon")?.matchesPlayed).toBe(1);
-    expect(byName.get("Simon")?.rating).toBe(1050);
-    expect(byName.get("Alex")?.rating).toBe(950);
+    expect(byName.get("Simon")?.rating).toBe(1035);
+    expect(byName.get("Alex")?.rating).toBe(965);
     expect(byName.get("Simon")?.wins).toBe(1);
     expect(byName.get("Alex")?.losses).toBe(1);
   });
@@ -488,14 +488,14 @@ describe.skipIf(!hasDatabase)("matches service", () => {
 
     // The corrected deltas come back (for a payoff-style confirmation)…
     const bySide = Object.fromEntries(edited.deltas.map((d) => [d.side, d]));
-    expect(bySide.A.delta).toBe(-50);
-    expect(bySide.B.delta).toBe(50);
+    expect(bySide.A.delta).toBe(-35);
+    expect(bySide.B.delta).toBe(35);
 
     // …and the projections read as if the match was always logged that way.
     const byName = new Map((await getLeaderboard(db)).map((e) => [e.name, e]));
-    expect(byName.get("Alex")?.rating).toBe(1050);
+    expect(byName.get("Alex")?.rating).toBe(1035);
     expect(byName.get("Alex")?.wins).toBe(1);
-    expect(byName.get("Simon")?.rating).toBe(950);
+    expect(byName.get("Simon")?.rating).toBe(965);
     expect(byName.get("Simon")?.losses).toBe(1);
   });
 
@@ -524,13 +524,13 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     );
 
     // Same worked example as the late-sync test: with Casey's win first,
-    // Casey ends at 1050 and Simon's later win brings him back to 1000.
+    // Casey ends at 1035 and Simon's later underdog win brings him to 1004.
     const byName = new Map(
       (await getLeaderboard(db)).map((e) => [e.name, e.rating]),
     );
-    expect(byName.get("Casey")).toBe(1050);
-    expect(byName.get("Simon")).toBe(1000);
-    expect(byName.get("Alex")).toBe(950);
+    expect(byName.get("Casey")).toBe(1035);
+    expect(byName.get("Simon")).toBe(1004);
+    expect(byName.get("Alex")).toBe(961);
   });
 
   it("editing sides and sets replaces the participants wholesale", async () => {
@@ -558,7 +558,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(byName.get("Alex")?.matchesPlayed).toBe(0);
     expect(byName.get("Alex")?.rating).toBe(1000);
     expect(byName.get("Casey")?.losses).toBe(1);
-    expect(byName.get("Casey")?.rating).toBe(950);
+    expect(byName.get("Casey")?.rating).toBe(960);
   });
 
   it("enforces edit rights and input validation on edit", async () => {
@@ -629,17 +629,17 @@ describe.skipIf(!hasDatabase)("matches service", () => {
       ["Simon", "B"],
     ]);
     // Deltas come from rating_history: day 1 replays first and both Players
-    // are still Provisional, so Casey's day-2 win reaches the +50 cap.
+    // are still Provisional, so Casey's day-2 upset is worth +39.
     const caseyRow = newest.participants[0];
     if (caseyRow.kind !== "player") throw new Error("Expected Player");
-    expect(caseyRow.delta).toBe(50);
-    expect(caseyRow.ratingAfter).toBe(1050);
+    expect(caseyRow.delta).toBe(39);
+    expect(caseyRow.ratingAfter).toBe(1039);
 
     expect(oldest.sets).toEqual(sets);
     expect(oldest.participants.map((p) => p.name)).toEqual(["Simon", "Alex"]);
     const oldestWinner = oldest.participants[0];
     if (oldestWinner.kind !== "player") throw new Error("Expected Player");
-    expect(oldestWinner.delta).toBe(50);
+    expect(oldestWinner.delta).toBe(38);
   });
 
   it("fetches a single match with named, sided participants", async () => {
@@ -677,13 +677,13 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     expect(detail?.rank).toBe(1);
     expect(detail?.wins).toBe(3);
     expect(detail?.losses).toBe(0);
-    // Provisional fold: 1000 → 1050 → 1086 → 1113.
-    expect(detail?.rating).toBe(1113);
+    // Provisional fold: 1000 → 1035 → 1063 → 1086.
+    expect(detail?.rating).toBe(1086);
 
     const alexDetail = await getPlayerDetail(db, alex.id);
     expect(alexDetail?.rank).toBe(2);
     expect(alexDetail?.losses).toBe(3);
-    expect(alexDetail?.rating).toBe(887);
+    expect(alexDetail?.rating).toBe(914);
   });
 
   it("player detail's rating series is chronological even when logged out of order", async () => {
@@ -698,13 +698,13 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const detail = await getPlayerDetail(db, simon.id);
 
     // Same worked example as the late-sync test: Simon loses to Casey on
-    // day 1 (1000 → 950), then beats Alex and returns to 1000.
+    // day 1 (1000 → 965), then beats Alex as an underdog and reaches 1004.
     expect(detail?.ratingSeries.map((p) => p.playedAt)).toEqual([day1, day2]);
-    expect(detail?.ratingSeries[0].ratingAfter).toBe(950);
-    expect(detail?.ratingSeries[1].ratingAfter).toBe(1000);
+    expect(detail?.ratingSeries[0].ratingAfter).toBe(965);
+    expect(detail?.ratingSeries[1].ratingAfter).toBe(1004);
     // Each point carries its match's projection delta for the chart tooltip.
-    expect(detail?.ratingSeries[0].delta).toBe(-50);
-    expect(detail?.ratingSeries[1].delta).toBe(50);
+    expect(detail?.ratingSeries[0].delta).toBe(-35);
+    expect(detail?.ratingSeries[1].delta).toBe(39);
   });
 
   it("player detail lists only that player's matches, newest first", async () => {
@@ -730,7 +730,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const detailWinner = detail?.matches[1].participants[0];
     expect(detailWinner?.kind).toBe("player");
     if (detailWinner?.kind === "player") {
-      expect(detailWinner.delta).toBe(50);
+      expect(detailWinner.delta).toBe(35);
     }
   });
 
@@ -814,7 +814,7 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const retiree = await getPlayerDetail(db, alex.id);
     expect(retiree?.retired).toBe(true);
     expect(retiree?.losses).toBe(1);
-    expect(retiree?.rating).toBe(950);
+    expect(retiree?.rating).toBe(965);
 
     // A player yet to play: starting rating, empty everything.
     const casey = await createPlayer(db, "Casey");
