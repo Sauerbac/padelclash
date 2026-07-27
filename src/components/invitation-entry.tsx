@@ -8,11 +8,23 @@ import { Input } from "@/components/ui/input";
 import { invitationDestination } from "@/lib/invitation-entry";
 import { useStandaloneDisplayMode } from "@/lib/use-pwa-presentation";
 
-export function InvitationEntry() {
+export function InvitationEntry({
+  installed: installedOverride,
+  initialInput = "",
+  initialError = null,
+}: {
+  /** Only the gallery passes this to render the installed-PWA state. */
+  installed?: boolean;
+  /** Gallery seam for the filled invitation field. */
+  initialInput?: string;
+  /** Gallery seam for the rejected local-parse state. */
+  initialError?: string | null;
+} = {}) {
   const router = useRouter();
-  const installed = useStandaloneDisplayMode();
-  const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const detectedInstalled = useStandaloneDisplayMode();
+  const installed = installedOverride ?? detectedInstalled;
+  const [input, setInput] = useState(initialInput);
+  const [error, setError] = useState<string | null>(initialError);
 
   if (!installed) return null;
 

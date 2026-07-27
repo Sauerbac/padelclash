@@ -1,5 +1,9 @@
 # Join / Bind Device
 
+**States: [`/dev/gallery/join`](../../src/app/dev/gallery/[section]/page.tsx)** —
+both invitation kinds, every `InvitationState`, unavailable/unknown links and
+confirmation refusal.
+
 ## Identity
 
 - Route: `/join/:token`
@@ -76,19 +80,20 @@ current installation state atomically.
 
 ### Binding failed
 
-- Change the heading to `Something went wrong`.
-- Explain that the device could not be linked.
-- Suggest reloading or asking the admin for a fresh link.
-- There is no custom retry control; reload is the retry mechanism.
+- Keep the invitation preview visible and show the specific refusal inline.
+- A stale General-Link choice returns to the picker after refresh when the
+  Player was just joined or the requested name was just taken.
+- Other failures suggest asking the admin for a fresh link. Reload remains the
+  retry mechanism; there is no custom retry control.
 
 ### Invalid or revoked link
 
 The server refuses unknown tokens and tokens for retired players. Render a
 standalone error card:
 
-- Title: `This link doesn’t work`.
-- Body: the invite link is invalid or has been replaced; ask the admin for a
-  fresh one.
+- Title: `Dead link`.
+- Body names whether the link is unknown, revoked, consumed, expired, or points
+  at an unavailable Player, then asks for a fresh one.
 
 No binding attempt is made and no tab bar is shown.
 

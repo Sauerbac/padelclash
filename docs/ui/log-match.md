@@ -1,5 +1,9 @@
 # Log Match
 
+**States: [`/dev/gallery/log`](../../src/app/dev/gallery/[section]/page.tsx)** —
+bound, unbound, refused, queued and successful-payoff states use the real
+prop-driven view and form.
+
 ## Identity
 
 - Route: `/log`

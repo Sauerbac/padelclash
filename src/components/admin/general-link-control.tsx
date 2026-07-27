@@ -14,6 +14,11 @@ import {
 } from "@/components/admin/copy-link-button";
 import type { LinkDetails } from "@/services/onboarding";
 
+export interface GeneralLinkActions {
+  generate?: typeof generateGeneralLinkAction;
+  revoke?: typeof revokeGeneralLinkAction;
+}
+
 /**
  * The circle's one General Onboarding Link (spec decisions 29, 36 and 50).
  * While one is live it can only be copied or revoked — generating another is
@@ -22,6 +27,7 @@ import type { LinkDetails } from "@/services/onboarding";
 export function GeneralLinkControl({
   link,
   msRemaining,
+  actions,
 }: {
   link: LinkDetails | null;
   /**
@@ -31,7 +37,12 @@ export function GeneralLinkControl({
    * minutes fast would otherwise be told a live link had expired.
    */
   msRemaining: number | null;
+  /** Gallery stubs; production uses the imported server actions. */
+  actions?: GeneralLinkActions;
 }) {
+  const generateGeneralLink =
+    actions?.generate ?? generateGeneralLinkAction;
+  const revokeGeneralLink = actions?.revoke ?? revokeGeneralLinkAction;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const remaining = useCountdown(msRemaining);
@@ -47,7 +58,7 @@ export function GeneralLinkControl({
   function generate() {
     setError(null);
     startTransition(async () => {
-      const result = await generateGeneralLinkAction();
+      const result = await generateGeneralLink();
       if (!result.ok) {
         setError(result.error);
         return;
@@ -100,7 +111,7 @@ export function GeneralLinkControl({
               title="Revoke the general invite link?"
               description="Anyone still holding it loses the ability to join — including whoever it's already been forwarded to. Players who joined with it keep their access."
               confirmLabel="Revoke"
-              onConfirm={() => run(revokeGeneralLinkAction)}
+              onConfirm={() => run(revokeGeneralLink)}
             />
           </>
         ) : (

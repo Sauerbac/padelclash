@@ -1,5 +1,8 @@
 # Edit Match
 
+**States: [`/dev/gallery/edit`](../../src/app/dev/gallery/[section]/page.tsx)** —
+editable, locked and successful-correction states through the shared form.
+
 ## Identity
 
 - Route: `/matches/:id/edit`
@@ -66,4 +69,3 @@ not queued; show `You’re offline — edits need a connection.`
 
 An unknown or malformed match ID renders the framework’s not-found view. It is
 not treated as an empty edit form.
-

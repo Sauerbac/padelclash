@@ -9,8 +9,19 @@ import { cn } from "@/lib/utils";
  * letter-spaced text tabs, and the Log tab as a skewed primary-red plate
  * breaking out of the bar. Active text tab: 2px red top border + bright text.
  */
-export function TabBar() {
-  const pathname = usePathname();
+export function TabBar({
+  /**
+   * Which route to light up, defaulting to the one actually being viewed.
+   * Nothing in the app passes it; the gallery does, because a screen case
+   * renders at `/dev/gallery/…` and would otherwise show a bar with no active
+   * tab — a shell that lies about the screen under review (decision 127).
+   */
+  pathname: activePath,
+}: {
+  pathname?: string;
+} = {}) {
+  const currentPath = usePathname();
+  const pathname = activePath ?? currentPath;
   const feedActive = pathname === "/" || pathname.startsWith("/players") || pathname.startsWith("/matches");
   const logActive = pathname.startsWith("/log");
   const rankingsActive = pathname.startsWith("/leaderboard");

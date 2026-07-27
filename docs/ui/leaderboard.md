@@ -1,5 +1,8 @@
 # Leaderboard
 
+**States: [`/dev/gallery/leaderboard`](../../src/app/dev/gallery/[section]/page.tsx)** —
+empty, early-table, exactly-three and mixed podium/table standings.
+
 ## Identity
 
 - Route: `/leaderboard`

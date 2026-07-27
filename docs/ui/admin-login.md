@@ -1,5 +1,9 @@
 # Admin Login
 
+**States: [`/dev/gallery/admin`](../../src/app/dev/gallery/[section]/page.tsx)** —
+initial login, wrong-password, missing-configuration and authenticated-panel
+states.
+
 ## Identity
 
 - Route: `/admin` when there is no valid admin session
@@ -31,4 +35,3 @@ username field, remember-me control, password reset flow, or secondary link.
 - Missing server configuration: show an inline message that admin login is not
   configured because `ADMIN_PASSWORD` is unset.
 - Success: establish the admin session and refresh `/admin` into the Admin Panel.
-

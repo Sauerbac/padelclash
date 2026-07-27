@@ -16,7 +16,20 @@ import { QueuedMatches } from "@/components/queued-matches";
  * It exposes nothing new: those matches were written on this device, from its
  * own IndexedDB, and an empty queue renders nothing at all.
  */
-export function NotJoined() {
+export function NotJoined({
+  /**
+   * The queue section, defaulting to the real IndexedDB-backed component. Only
+   * the gallery passes it, with fixture cards — reading the reviewer's actual
+   * device queue would make the case show different states on every machine
+   * (decision 127).
+   */
+  queued = <QueuedMatches />,
+  invitation = <InvitationEntry />,
+}: {
+  queued?: React.ReactNode;
+  /** Gallery seam for installed-PWA invitation-entry states. */
+  invitation?: React.ReactNode;
+} = {}) {
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-5 px-5 py-10">
       <div className="border px-5 py-6">
@@ -47,7 +60,7 @@ export function NotJoined() {
           can&apos;t create access on its own.
         </p>
 
-        <InvitationEntry />
+        {invitation}
 
         <p className="mt-5 border-t border-hairline pt-4 text-sm font-semibold text-muted-foreground">
           Are you the admin?{" "}
@@ -57,7 +70,7 @@ export function NotJoined() {
         </p>
       </div>
 
-      <QueuedMatches />
+      {queued}
     </main>
   );
 }

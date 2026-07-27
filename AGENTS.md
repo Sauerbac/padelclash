@@ -23,6 +23,28 @@ added to the spec's decision log.
   components build on those primitives.
 - The match log is the source of truth — ratings/stats are derived by replay,
   never patched in place.
+- Application route pages that load private or persisted data are an `async`
+  loader plus a pure view component taking props. The loader does auth and
+  queries; the view renders. Screen states must be reachable without a database
+  (decision 127). Fixture-only `/dev/gallery` pages are already pure views and
+  are exempt from manufacturing empty async loaders.
+- Interactive components take their server action as an optional prop defaulting
+  to the real import — `deleteMatch = deleteMatchAction`. Production never
+  passes it; the gallery passes stubs. Do not "clean up" these defaults.
+
+## UI states
+
+- Every UI state documented in `docs/ui/` has a case in `/dev/gallery`. A change
+  that adds or alters a state updates both in the same commit — this is the only
+  guard against the catalogue quietly becoming a lie (decisions 126–128,
+  [ADR 0004](docs/adr/0004-dev-only-ui-state-gallery.md)).
+- Closed unions (`InvitationState`, `PlayerStatus`, `MatchSyncRefusal`, CVA
+  variant keys) are galleried as `Record<Union, Case>` so `tsc` fails on an
+  unhandled member. Never widen these to `Partial<>` or an array to silence a
+  build — that deletes the only mechanical completeness check in the system.
+- The gallery's own chrome uses plain unstyled HTML, never `src/components/ui/`
+  primitives. A broken `Button` must not break the tool that reveals it.
+- `/dev/gallery` renders fixtures only and never queries the database.
 
 ## Git
 

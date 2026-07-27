@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { CircleX, Pencil } from "lucide-react";
-import { deleteMatchAction } from "@/app/actions/matches";
+import {
+  deleteMatchAction,
+  type DeleteMatchActionResult,
+} from "@/app/actions/matches";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -11,12 +14,24 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
  * Edit/delete affordances on a feed card. Only rendered when the viewer has
  * edit rights (the server decides); the actions re-check server-side.
  */
-export function MatchCardActions({ matchId }: { matchId: string }) {
+export function MatchCardActions({
+  matchId,
+  /**
+   * The delete action, defaulting to the real one. Nothing in the app passes
+   * it (decision 127): the gallery does, because the pending and failed states
+   * below live in `useTransition` and are unreachable from props. Do not
+   * "clean up" this default into a required prop.
+   */
+  deleteMatch = deleteMatchAction,
+}: {
+  matchId: string;
+  deleteMatch?: (matchId: string) => Promise<DeleteMatchActionResult>;
+}) {
   const [pending, startTransition] = useTransition();
 
   function remove() {
     startTransition(async () => {
-      const result = await deleteMatchAction(matchId);
+      const result = await deleteMatch(matchId);
       // revalidatePath in the action refreshes the feed on success.
       if (!result.ok) window.alert(result.error);
     });

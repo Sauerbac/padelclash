@@ -50,7 +50,13 @@ export function QueuedMatches() {
   );
 }
 
-function QueuedMatchCard({ match }: { match: QueuedMatch }) {
+/**
+ * One queued card. Exported for the gallery (decision 127): it is already
+ * prop-driven, so all three of its states — pending, transient refusal,
+ * permanent refusal — are reachable from a fixture. Only the container above
+ * touches IndexedDB.
+ */
+export function QueuedMatchCard({ match }: { match: QueuedMatch }) {
   const loserSide = match.winnerSide === "A" ? "B" : "A";
   const players = (side: "A" | "B") =>
     match.sides[side].map((participant, index) =>

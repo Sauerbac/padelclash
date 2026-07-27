@@ -1,12 +1,19 @@
 # Feed
 
+**States: [`/dev/gallery/feed`](../../src/app/dev/gallery/feed/page.tsx)** —
+every state below has a case there, framed at 320 / 390 / 430. A state added
+here without a case (or the reverse) is a defect; see
+[the gallery conventions](README.md#reviewing-these-states).
+
 ## Identity
 
 - Route: `/`
 - Tab: Feed
-- Main implementation: `src/app/(tabs)/page.tsx`
+- Main implementation: `src/app/(tabs)/page.tsx` — an `async` loader that
+  resolves the viewer and queries the feed, delegating everything it renders to
+  `src/components/feed-view.tsx` (spec decision 127).
 - Main reusable UI: `src/components/match-card.tsx`,
-  `src/components/queued-matches.tsx`, `src/components/name-picker.tsx`
+  `src/components/queued-matches.tsx`
 - Shared card internals (headline, timestamp, set-score row) live in
   `src/components/match-card-parts.tsx`, so the synced and queued cards cannot
   drift apart visually.
@@ -40,27 +47,25 @@ matches logged from this device are credited to that player. The name is not a
 separate profile control here; the name itself can lead to Player Detail only
 when rendered as a player link elsewhere.
 
-### Unbound device with name picker enabled
+### Admin session without a binding
 
-Show a “Who are you?” onboarding section containing:
+An admin reads past the gate without naming a Player (spec decision 49). The
+identity line says so and explains that logging a match needs a joined player on
+this device. Every card additionally carries its logged-by row.
 
-- A short explanation that choosing a name binds this device.
-- One selectable action per active roster player.
-- A confirmation step before binding: “Bind this device to [player]?”
-- A pending/disabled state while binding is in progress.
-- On success, persist the recovery marker and refresh the screen into the
-  bound-device state.
-- On failure, show an inline error explaining that the picker may have been
-  disabled and suggesting reload or a personal join link.
+### No binding and no admin session
 
-The picker is a fallback onboarding path controlled by the admin. It can bind
-only an unbound device and only to an active player.
+The Feed is never reached: the read gate returns the **Not joined** screen
+before the match log is queried (spec decision 33), so nothing about the
+circle's history enters the response. That screen still renders this device's
+offline queue, because a device whose binding was just revoked may hold matches
+that only an explicit Discard may remove (decision 26).
 
-### Unbound device with name picker disabled
-
-Show explanatory text saying that the device is not bound and that the user
-should ask the admin for their personal join link. The feed remains readable,
-but this state does not provide a way to identify the Logger.
+> A name-picker onboarding path used to live here — an admin-controlled
+> fallback that bound a device by choosing a name from the roster. It was
+> removed along with the reusable personal token; there is no
+> `name-picker.tsx` and no picker setting. Joining now happens only through an
+> admin-issued invitation link.
 
 ## Synced match card
 

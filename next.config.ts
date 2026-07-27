@@ -13,6 +13,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // The UI state gallery frames its own case routes at phone widths
+        // (decision 128), and `DENY` above blocks that even same-origin. This
+        // relaxes it to `SAMEORIGIN` for `/dev/*` only — a subtree that
+        // `notFound()`s outside development, so in production these paths have
+        // nothing to frame.
+        source: "/dev/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
+      {
         source: "/join/:path*",
         headers: [{ key: "Referrer-Policy", value: "no-referrer" }],
       },

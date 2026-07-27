@@ -4,8 +4,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useIosBrowserGuidance } from "@/lib/use-pwa-presentation";
 
-export function JoinRecoveryGuidance() {
-  const visible = useIosBrowserGuidance();
+export function JoinRecoveryGuidance({
+  visible: visibleOverride,
+}: {
+  /** Only the gallery passes this to pin the iOS-browser state. */
+  visible?: boolean;
+} = {}) {
+  const detectedVisible = useIosBrowserGuidance();
+  const visible = visibleOverride ?? detectedVisible;
   const [copied, setCopied] = useState(false);
 
   if (!visible) return null;

@@ -1,5 +1,8 @@
 # Player Detail
 
+**States: [`/dev/gallery/player`](../../src/app/dev/gallery/[section]/page.tsx)** —
+active, Retired and no-history profiles through `PlayerDetailView`.
+
 ## Identity
 
 - Route: `/players/:id`
@@ -120,4 +123,3 @@ only this player’s matches, newest first. It preserves:
 With no matches, show `No matches yet.` The chart, relationship tables, and
 history are all derived read views; there are no local controls for editing
 stats.
-

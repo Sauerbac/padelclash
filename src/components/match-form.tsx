@@ -5,6 +5,10 @@ import { useState, useTransition } from "react";
 import {
   editMatchAction,
   logMatchAction,
+  type EditMatchActionResult,
+  type EditMatchPayload,
+  type LogMatchActionResult,
+  type LogMatchPayload,
   type PayoffDelta,
 } from "@/app/actions/matches";
 import { Alert } from "@/components/ui/alert";
@@ -61,11 +65,24 @@ export interface EditableMatch {
   sets: { a: number; b: number }[] | null;
 }
 
+export type MatchFormDraft = Pick<
+  EditableMatch,
+  "sides" | "winnerSide" | "sets"
+>;
+
+export interface MatchFormActions {
+  logMatch?: (payload: LogMatchPayload) => Promise<LogMatchActionResult>;
+  editMatch?: (payload: EditMatchPayload) => Promise<EditMatchActionResult>;
+  enqueue?: typeof enqueueMatch;
+}
+
 export function MatchForm({
   roster,
   reservedPlayerNames,
   loggerId,
   editing,
+  initialDraft,
+  actions,
 }: {
   roster: RosterEntry[];
   /** Full roster, including Retired Players whose names Guests may not use. */
@@ -74,18 +91,26 @@ export function MatchForm({
   loggerId?: string;
   /** When set: pre-fill from this match and save corrections to it. */
   editing?: EditableMatch;
+  /** Only the gallery passes this to start a new form with a valid draft. */
+  initialDraft?: MatchFormDraft;
+  /** Gallery stubs; production uses the imported server actions. */
+  actions?: MatchFormActions;
 }) {
+  const logMatch = actions?.logMatch ?? logMatchAction;
+  const editMatch = actions?.editMatch ?? editMatchAction;
+  const enqueue = actions?.enqueue ?? enqueueMatch;
+  const startingDraft = editing ?? initialDraft;
   const [doubles, setDoubles] = useState(
-    editing ? editing.sides.A.length === 2 : false,
+    startingDraft ? startingDraft.sides.A.length === 2 : false,
   );
   // The Logger pre-fills the first slot of side A (spec "Screens").
   const [slots, setSlots] = useState<Slots>(() =>
-    editing
+    startingDraft
       ? {
-          a1: editing.sides.A[0] ?? null,
-          a2: editing.sides.A[1] ?? null,
-          b1: editing.sides.B[0] ?? null,
-          b2: editing.sides.B[1] ?? null,
+          a1: startingDraft.sides.A[0] ?? null,
+          a2: startingDraft.sides.A[1] ?? null,
+          b1: startingDraft.sides.B[0] ?? null,
+          b2: startingDraft.sides.B[1] ?? null,
         }
       : {
           a1: loggerId ? { kind: "player", playerId: loggerId } : null,
@@ -95,14 +120,14 @@ export function MatchForm({
         },
   );
   const [winner, setWinner] = useState<Side | null>(
-    editing ? editing.winnerSide : null,
+    startingDraft ? startingDraft.winnerSide : null,
   );
   const [recordSets, setRecordSets] = useState(
-    Boolean(editing?.sets?.length),
+    Boolean(startingDraft?.sets?.length),
   );
   const [sets, setSets] = useState<SetRow[]>(() =>
-    editing?.sets?.length
-      ? editing.sets.map((s) => ({ a: String(s.a), b: String(s.b) }))
+    startingDraft?.sets?.length
+      ? startingDraft.sets.map((s) => ({ a: String(s.a), b: String(s.b) }))
       : [{ a: "", b: "" }],
   );
   // Defaults to "now" (spec "Match"). The server render can't know the
@@ -210,7 +235,7 @@ export function MatchForm({
       // The queued item records who logged it, so a device later rebound to
       // another player can't sync it under that identity (decision 52).
       const queueLocally = async () => {
-        await enqueueMatch({
+        await enqueue({
           ...payload,
           ownerPlayerId: loggerId ?? "",
           // Captured now: if this device is later rebound to someone else,
@@ -234,8 +259,8 @@ export function MatchForm({
       if (!editing && !navigator.onLine) return queueLocally();
       try {
         const result = editing
-          ? await editMatchAction(payload)
-          : await logMatchAction({ ...payload, ownerPlayerId: loggerId ?? "" });
+          ? await editMatch(payload)
+          : await logMatch({ ...payload, ownerPlayerId: loggerId ?? "" });
         if (result.ok) setPayoff(result.deltas);
         else setError(result.error);
       } catch {
@@ -543,6 +568,7 @@ export function MatchForm({
       {error && <Alert variant="destructive">{error}</Alert>}
 
       <Button
+        data-match-submit
         onClick={submit}
         disabled={pending}
         size="lg"

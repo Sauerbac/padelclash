@@ -24,13 +24,42 @@ import {
 import { Input } from "@/components/ui/input";
 import type { RosterEntry } from "@/services/players";
 
+export interface PlayerRowActions {
+  rename?: typeof renamePlayerAction;
+  generatePersonalLink?: typeof generatePersonalLinkAction;
+  revokePersonalLink?: typeof revokePersonalLinkAction;
+  revokeAccess?: typeof revokeAccessAction;
+  retire?: typeof retirePlayerAction;
+  restore?: typeof restorePlayerAction;
+  deletePlayer?: typeof deletePlayerAction;
+  getBindingHistory?: typeof getBindingHistoryAction;
+}
+
 /**
  * One roster row, with the controls its state earns (spec decision 50):
  * Joined rows manage a live binding, Not Joined rows manage an invitation,
  * Retired rows offer restore. Conditional delete appears wherever the match
  * log doesn't reference the Player.
  */
-export function PlayerRow({ entry }: { entry: RosterEntry }) {
+export function PlayerRow({
+  entry,
+  actions,
+}: {
+  entry: RosterEntry;
+  /** Gallery stubs; production uses the imported server actions. */
+  actions?: PlayerRowActions;
+}) {
+  const rename = actions?.rename ?? renamePlayerAction;
+  const generatePersonalLink =
+    actions?.generatePersonalLink ?? generatePersonalLinkAction;
+  const revokePersonalLink =
+    actions?.revokePersonalLink ?? revokePersonalLinkAction;
+  const revokePlayerAccess = actions?.revokeAccess ?? revokeAccessAction;
+  const retire = actions?.retire ?? retirePlayerAction;
+  const restore = actions?.restore ?? restorePlayerAction;
+  const deletePlayer = actions?.deletePlayer ?? deletePlayerAction;
+  const getBindingHistory =
+    actions?.getBindingHistory ?? getBindingHistoryAction;
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -45,7 +74,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
   function generateInvite() {
     setError(null);
     startTransition(async () => {
-      const result = await generatePersonalLinkAction(entry.id);
+      const result = await generatePersonalLink(entry.id);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -60,7 +89,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
         <form
           action={(formData) =>
             run(async () => {
-              const state = await renamePlayerAction({}, formData);
+              const state = await rename({}, formData);
               return state.error
                 ? { ok: false, error: state.error }
                 : { ok: true };
@@ -98,7 +127,11 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
         </p>
       )}
 
-      <BindingHistory playerId={entry.id} name={entry.name} />
+      <BindingHistory
+        playerId={entry.id}
+        name={entry.name}
+        getBindingHistory={getBindingHistory}
+      />
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {entry.personalLink && (
@@ -139,7 +172,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
             variant="chip"
             size="xs"
             disabled={pending}
-            onClick={() => run(() => revokePersonalLinkAction(entry.id))}
+            onClick={() => run(() => revokePersonalLink(entry.id))}
           >
             Revoke invite
           </Button>
@@ -155,7 +188,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
             title={`Revoke ${entry.name}'s access?`}
             description="Their device loses access immediately. Their outstanding invite and the circle's General Link are revoked too, so nobody can walk straight back in."
             confirmLabel="Revoke"
-            onConfirm={() => run(() => revokeAccessAction(entry.id))}
+            onConfirm={() => run(() => revokePlayerAccess(entry.id))}
           />
         )}
 
@@ -164,7 +197,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
             variant="chip"
             size="xs"
             disabled={pending}
-            onClick={() => run(() => restorePlayerAction(entry.id))}
+            onClick={() => run(() => restore(entry.id))}
           >
             Restore
           </Button>
@@ -178,7 +211,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
             title={`Retire ${entry.name}?`}
             description="They leave the pickers and lose access; their match history stays."
             confirmLabel="Retire"
-            onConfirm={() => run(() => retirePlayerAction(entry.id))}
+            onConfirm={() => run(() => retire(entry.id))}
           />
         )}
 
@@ -192,7 +225,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
             title={`Delete ${entry.name} for good?`}
             description="No match references them, so nothing is lost — but this can't be undone."
             confirmLabel="Delete"
-            onConfirm={() => run(() => deletePlayerAction(entry.id))}
+            onConfirm={() => run(() => deletePlayer(entry.id))}
           />
         )}
       </div>
@@ -215,7 +248,15 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
  * consulted rarely, and irrelevant to the roster's usual job. Deliberately
  * hash-free — nothing shown here can be replayed as a credential.
  */
-function BindingHistory({ playerId, name }: { playerId: string; name: string }) {
+function BindingHistory({
+  playerId,
+  name,
+  getBindingHistory,
+}: {
+  playerId: string;
+  name: string;
+  getBindingHistory: typeof getBindingHistoryAction;
+}) {
   const [records, setRecords] = useState<BindingRecord[] | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, startTransition] = useTransition();
@@ -224,7 +265,7 @@ function BindingHistory({ playerId, name }: { playerId: string; name: string }) 
     if (open) return setOpen(false);
     setOpen(true);
     if (records) return;
-    startTransition(async () => setRecords(await getBindingHistoryAction(playerId)));
+    startTransition(async () => setRecords(await getBindingHistory(playerId)));
   }
 
   // Only past devices are news; the active one is already on the row above.

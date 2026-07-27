@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   confirmJoinAction,
+  type JoinActionResult,
   type JoinConfirmation,
 } from "@/app/actions/onboarding";
 import { JoinRecoveryGuidance } from "@/components/join-recovery-guidance";
@@ -13,6 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BINDING_CHANGED_EVENT } from "@/services/offline/queue";
 import type { InvitationPreview } from "@/services/onboarding";
+
+export type ConfirmJoin = (
+  confirmation: JoinConfirmation,
+) => Promise<JoinActionResult>;
 
 /**
  * The explicit confirmation both link kinds require (spec decisions 42 and 43).
@@ -34,9 +39,14 @@ import type { InvitationPreview } from "@/services/onboarding";
 export function JoinConfirm({
   token,
   preview,
+  confirmJoin = confirmJoinAction,
+  showRecoveryGuidance,
 }: {
   token: string;
   preview: InvitationPreview;
+  confirmJoin?: ConfirmJoin;
+  /** Gallery seam for the browser-presentation guidance branch. */
+  showRecoveryGuidance?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +59,7 @@ export function JoinConfirm({
   function confirm(confirmation: JoinConfirmation) {
     setError(null);
     startTransition(async () => {
-      const result = await confirmJoinAction(confirmation);
+      const result = await confirmJoin(confirmation);
       if (result.ok) {
         // This installation now has a binding. Anything queued from before —
         // a device re-invited after losing access still holds its matches —
@@ -94,7 +104,7 @@ export function JoinConfirm({
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-4 px-5 py-10">
-      <JoinRecoveryGuidance />
+      <JoinRecoveryGuidance visible={showRecoveryGuidance} />
       <div className="border px-5 py-6">
         <div className="flex items-start justify-between gap-3">
           <p className="kicker">Welcome to the club</p>

@@ -18,6 +18,38 @@ spacing, borders, or component styling as design requirements.
 | [Admin Login](admin-login.md) | `/admin` when signed out | Authenticate the single administrator |
 | [Admin Panel](admin-panel.md) | `/admin` when signed in | Manage Players, onboarding links, Device Bindings, and retirement |
 
+## Reviewing these states
+
+The states described in this folder are rendered from fixtures at `/dev/gallery`,
+a route that exists only outside production (decisions 126–128,
+[ADR 0004](../adr/0004-dev-only-ui-state-gallery.md)). It is the way to see a
+blocked-sync card, an expired invitation, or a pending binding without
+contriving server conditions.
+
+| Section | Contents |
+| --- | --- |
+| `/dev/gallery/ds` | Every `src/components/ui/` primitive: variants × sizes × rest/focus/disabled/invalid, plus token swatches |
+| `/dev/gallery/<screen>` | One screen's states, each in an iframe at 320 / 390 / 430 px |
+| `/dev/gallery` | Index, plus component-level cases rendered inline |
+
+The overview links the design system and every main view. Each screen document
+names its gallery section, and the section renders its named states from
+fixtures without querying application data.
+
+Conventions:
+
+- Each screen page here carries a **States** link to its gallery section, and
+  each gallery section names this source document in its header. The two are
+  written and reviewed together; a named state added in one without the other
+  is a defect.
+- Screen cases render in iframes because the tab bar is anchored to the viewport
+  (decision 86) and horizontal page scroll is a defect (decision 88) — neither
+  reports truthfully inline.
+- Fixtures are deliberately abusive (very long names, three-digit deltas, five
+  sets). They stress layout; they are not a truthful Rating history.
+- Cases have stable ids in their URLs, so screenshot automation can be layered on
+  later without redesigning the catalogue.
+
 ## Shared shell and global behavior
 
 - The three main tabs are Feed, Log Match, and Leaderboard. They are represented
@@ -64,7 +96,9 @@ spacing, borders, or component styling as design requirements.
 - A match is either singles (1 player per side) or doubles (2 players per side).
 - There is always exactly one winner. Draws are not supported.
 - A match can store either no score detail (Simple Result) or 1–5 set scores.
-  Set scores are displayed but do not affect Elo in v1.
+  Set scores are displayed and contribute the sign-preserving dominance
+  multiplier defined by the rating engine; the final rounded Player delta has
+  no per-Match cap.
 - Every match affects ratings. Ratings are derived by replaying the complete
   match log, so editing or deleting a match can change later ratings too.
 - A player becomes ranked after 3 competitive matches. Players below that

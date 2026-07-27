@@ -1,5 +1,5 @@
 import { NotJoined } from "@/components/not-joined";
-import { TabBar } from "@/components/tab-bar";
+import { TabShell } from "@/components/tab-shell";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 
 /**
@@ -16,15 +16,5 @@ export default async function TabsLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   if (!(await viewerForPrivateRead())) return <NotJoined />;
 
-  return (
-    // `shrink-0`, not `flex-1`: as a flex child of #scroll-root, `min-h-full`
-    // (min-height: 100%) replaces the automatic minimum size, so a growable
-    // item collapses to the viewport and its content merely overflows —
-    // dragging the tab-bar reserve below up with it, out of reach of the
-    // scroller. Sizing to content and growing only via min-height fixes both.
-    <div className="flex min-h-full shrink-0 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-      {children}
-      <TabBar />
-    </div>
-  );
+  return <TabShell>{children}</TabShell>;
 }

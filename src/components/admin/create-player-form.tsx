@@ -6,9 +6,15 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function CreatePlayerForm() {
+export type CreatePlayer = typeof createPlayerAction;
+
+export function CreatePlayerForm({
+  createPlayer = createPlayerAction,
+}: {
+  createPlayer?: CreatePlayer;
+} = {}) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
-    createPlayerAction,
+    createPlayer,
     {},
   );
   const formRef = useRef<HTMLFormElement>(null);
@@ -19,7 +25,12 @@ export function CreatePlayerForm() {
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-2">
+    <form
+      ref={formRef}
+      action={formAction}
+      data-create-player
+      className="space-y-2"
+    >
       <div className="flex gap-2">
         <Input name="name" placeholder="New player name" required />
         <Button type="submit" disabled={pending} className="px-5 text-base">
