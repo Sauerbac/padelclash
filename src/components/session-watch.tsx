@@ -110,10 +110,15 @@ export function SessionWatch() {
           const snapshot = (await snapshotResponse.json()) as {
             player: { id: string; name: string };
             roster: { id: string; name: string }[];
+            reservedPlayerNames: string[];
           };
           if (snapshot.player.id === status.player.id) {
             await saveOfflineMatchSnapshot(
-              createOfflineMatchSnapshot(snapshot.player, snapshot.roster),
+              createOfflineMatchSnapshot(
+                snapshot.player,
+                snapshot.roster,
+                snapshot.reservedPlayerNames,
+              ),
             );
           }
         }

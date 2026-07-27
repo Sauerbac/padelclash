@@ -1,4 +1,5 @@
 import type { PayoffDelta } from "@/app/actions/matches";
+import { formatRatingDelta } from "@/lib/rating-format";
 
 /**
  * The celebration card after logging/editing (design "PayoffList"): gold
@@ -24,23 +25,21 @@ export function RatingPayoff({
       </p>
       <ul className="mt-2">
         {deltas.map((d) => {
-          const rounded = Math.round(d.delta);
-          const won = rounded >= 0;
+          const won = d.delta >= 0;
           return (
             <li
               key={d.playerId}
-              className="flex items-center justify-between border-b border-hairline py-2.5 last:border-b-0"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-hairline py-2.5 last:border-b-0"
             >
               <span
-                className={`text-[17px] font-semibold uppercase ${won ? "" : "text-muted-foreground"}`}
+                className={`min-w-0 break-words text-[17px] font-semibold uppercase ${won ? "" : "text-muted-foreground"}`}
               >
                 {d.name}
               </span>
-              <span className="font-mono text-sm font-medium text-muted-foreground">
-                {Math.round(d.ratingBefore)} → {Math.round(d.ratingAfter)}{" "}
+              <span className="whitespace-nowrap font-mono text-sm font-medium text-muted-foreground">
+                {d.ratingBefore} → {d.ratingAfter}{" "}
                 <span className={won ? "text-win" : "text-destructive"}>
-                  {won ? "+" : "−"}
-                  {Math.abs(rounded)}
+                  {formatRatingDelta(d.delta)}
                 </span>
               </span>
             </li>

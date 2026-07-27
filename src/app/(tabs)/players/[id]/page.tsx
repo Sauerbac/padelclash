@@ -63,7 +63,7 @@ export default async function PlayerDetailPage({
 
       <StatTriplet
         stats={[
-          { label: "Rating", value: `${Math.round(detail.rating)}` },
+          { label: "Rating", value: `${detail.rating}` },
           {
             label: "Rank",
             value: detail.rank !== null ? `#${detail.rank}` : "—",
@@ -78,7 +78,7 @@ export default async function PlayerDetailPage({
           <div className="flex justify-between">
             <h2 className="section-label">The Climb</h2>
             <span className="font-mono text-sm font-semibold text-accent">
-              {Math.round(detail.rating)}
+              {detail.rating}
             </span>
           </div>
           <div className="mt-2">

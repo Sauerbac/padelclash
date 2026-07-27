@@ -44,7 +44,7 @@ export function MatchHeadline({
   losers: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="[overflow-wrap:anywhere]">
       <div className="font-display text-[25px] leading-[1.02] tracking-[0.5px] uppercase">
         {winners}
         <span className="ml-2 font-mono text-[10px] font-semibold tracking-[2px] text-primary uppercase">

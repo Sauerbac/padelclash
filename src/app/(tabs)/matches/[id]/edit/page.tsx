@@ -14,7 +14,7 @@ import { currentActor } from "@/services/auth/actor";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
 import { getMatch } from "@/services/matches";
-import { listActivePlayers } from "@/services/players";
+import { listPlayers } from "@/services/players";
 
 export const metadata = { title: "Edit Match · PadelClash" };
 
@@ -28,9 +28,9 @@ export default async function EditMatchPage({
   if (!(await viewerForPrivateRead())) return <NotJoined />;
 
   const db = getDb();
-  const [viewer, roster, found] = await Promise.all([
+  const [viewer, allPlayers, found] = await Promise.all([
     currentActor(),
-    listActivePlayers(db),
+    listPlayers(db),
     getMatch(db, id),
   ]);
 
@@ -62,7 +62,11 @@ export default async function EditMatchPage({
 
   // Pickers show the active roster, plus this match's own participants even
   // if they have since retired — their slot must still render.
-  const options = new Map(roster.map(({ id, name }) => [id, name]));
+  const options = new Map(
+    allPlayers
+      .filter((player) => player.retiredAt === null)
+      .map(({ id, name }) => [id, name]),
+  );
   for (const p of participants) {
     if (p.kind === "guest") continue;
     if (!options.has(p.playerId)) options.set(p.playerId, p.name);
@@ -83,6 +87,7 @@ export default async function EditMatchPage({
 
       <MatchForm
         roster={[...options].map(([id, name]) => ({ id, name }))}
+        reservedPlayerNames={allPlayers.map(({ name }) => name)}
         editing={{
           id: match.id,
           playedAtIso: match.playedAt.toISOString(),

@@ -31,5 +31,11 @@ export function OfflineMatchEntry() {
     );
   }
 
-  return <MatchForm roster={snapshot.roster} loggerId={snapshot.player.id} />;
+  return (
+    <MatchForm
+      roster={snapshot.roster}
+      reservedPlayerNames={snapshot.reservedPlayerNames}
+      loggerId={snapshot.player.id}
+    />
+  );
 }

@@ -28,6 +28,7 @@ describe("offline Match-entry snapshot", () => {
         { id: "player-1", name: "Alex", rating: 1042 },
         { id: "player-2", name: "Blair", profile: { wins: 12 } },
       ],
+      ["Alex", "Blair", "Retired Casey"],
       new Date("2026-07-22T12:00:00.000Z"),
     );
 
@@ -37,6 +38,7 @@ describe("offline Match-entry snapshot", () => {
         { id: "player-1", name: "Alex" },
         { id: "player-2", name: "Blair" },
       ],
+      reservedPlayerNames: ["Alex", "Blair", "Retired Casey"],
       refreshedAt: "2026-07-22T12:00:00.000Z",
     });
     expect(JSON.stringify(snapshot)).not.toMatch(/token|rating|profile|wins/i);
@@ -65,6 +67,7 @@ describe("offline Match-entry snapshot", () => {
     const snapshot = createOfflineMatchSnapshot(
       { id: "player-1", name: "Alex" },
       [{ id: "player-1", name: "Alex" }],
+      ["Alex"],
       new Date("2026-07-22T12:00:00.000Z"),
     );
     await saveOfflineMatchSnapshot(snapshot);

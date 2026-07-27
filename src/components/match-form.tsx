@@ -22,10 +22,8 @@ import {
 import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
-import {
-  playerParticipant,
-  type MatchParticipant,
-} from "@/domain/match-participant";
+import { validateMatchDraft } from "@/domain/match-draft";
+import type { MatchParticipant } from "@/domain/match-participant";
 
 interface RosterEntry {
   id: string;
@@ -34,7 +32,8 @@ interface RosterEntry {
 
 type Side = "A" | "B";
 type Slot = "a1" | "a2" | "b1" | "b2";
-type Slots = Record<Slot, string>;
+type DraftParticipant = MatchParticipant | null;
+type Slots = Record<Slot, DraftParticipant>;
 
 interface SetRow {
   a: string;
@@ -64,37 +63,18 @@ export interface EditableMatch {
 
 export function MatchForm({
   roster,
+  reservedPlayerNames,
   loggerId,
   editing,
 }: {
   roster: RosterEntry[];
+  /** Full roster, including Retired Players whose names Guests may not use. */
+  reservedPlayerNames: string[];
   /** The bound player, pre-filled as side A's first slot when logging. */
   loggerId?: string;
   /** When set: pre-fill from this match and save corrections to it. */
   editing?: EditableMatch;
 }) {
-  const guestBySlotValue = new Map<string, MatchParticipant>();
-  const guestOptions: RosterEntry[] = [];
-  if (editing) {
-    for (const side of ["A", "B"] as const) {
-      editing.sides[side].forEach((participant, index) => {
-        if (participant.kind !== "guest") return;
-        const value = guestSlotValue(side, index);
-        guestBySlotValue.set(value, participant);
-        guestOptions.push({ id: value, name: `${participant.name} (Guest)` });
-      });
-    }
-  }
-  const pickerOptions = [...roster, ...guestOptions];
-  const editableSlotValue = (
-    participant: MatchParticipant | undefined,
-    side: Side,
-    index: number,
-  ): string =>
-    participant?.kind === "guest"
-      ? guestSlotValue(side, index)
-      : participant?.playerId ?? "";
-
   const [doubles, setDoubles] = useState(
     editing ? editing.sides.A.length === 2 : false,
   );
@@ -102,12 +82,17 @@ export function MatchForm({
   const [slots, setSlots] = useState<Slots>(() =>
     editing
       ? {
-          a1: editableSlotValue(editing.sides.A[0], "A", 0),
-          a2: editableSlotValue(editing.sides.A[1], "A", 1),
-          b1: editableSlotValue(editing.sides.B[0], "B", 0),
-          b2: editableSlotValue(editing.sides.B[1], "B", 1),
+          a1: editing.sides.A[0] ?? null,
+          a2: editing.sides.A[1] ?? null,
+          b1: editing.sides.B[0] ?? null,
+          b2: editing.sides.B[1] ?? null,
         }
-      : { a1: loggerId ?? "", a2: "", b1: "", b2: "" },
+      : {
+          a1: loggerId ? { kind: "player", playerId: loggerId } : null,
+          a2: null,
+          b1: null,
+          b2: null,
+        },
   );
   const [winner, setWinner] = useState<Side | null>(
     editing ? editing.winnerSide : null,
@@ -142,22 +127,44 @@ export function MatchForm({
   const sideValues = (side: Side) =>
     slotsFor(side).map((slot) => slots[slot]);
   const sideParticipants = (side: Side): MatchParticipant[] =>
-    sideValues(side).map(
-      (value) => guestBySlotValue.get(value) ?? playerParticipant(value),
+    sideValues(side).filter(
+      (participant): participant is MatchParticipant => participant !== null,
     );
-  const nameOf = (id: string) =>
-    pickerOptions.find((participant) => participant.id === id)?.name;
+  const nameOf = (participant: DraftParticipant) => {
+    if (!participant) return null;
+    return participant.kind === "guest"
+      ? participant.name.trim() || "Guest"
+      : roster.find((player) => player.id === participant.playerId)?.name ??
+          "Unknown";
+  };
 
-  function sideLabel(side: Side): string {
-    const names = sideValues(side)
-      .map((id) => nameOf(id))
-      .filter(Boolean);
-    return names.length > 0 ? names.join(" & ") : `Side ${side}`;
+  function sideLabel(side: Side): React.ReactNode {
+    const participants = sideValues(side).filter(
+      (participant): participant is MatchParticipant => participant !== null,
+    );
+    if (participants.length === 0) return `Side ${side}`;
+    return participants.map((participant, index) => (
+      <span
+        key={
+          participant.kind === "player"
+            ? participant.playerId
+            : `guest-${index}`
+        }
+      >
+        {index > 0 && <span className="text-muted-foreground"> & </span>}
+        {nameOf(participant)}
+        {participant.kind === "guest" && (
+          <span className="ml-1 font-mono text-[8px] tracking-[1px] text-accent">
+            GUEST
+          </span>
+        )}
+      </span>
+    ));
   }
 
   function submit() {
-    const filled = activeSlots.every((s) => slots[s] !== "");
-    if (!filled) return setError("Pick a player for every slot.");
+    const filled = activeSlots.every((slot) => slots[slot] !== null);
+    if (!filled) return setError("Pick a participant for every slot.");
     if (!winner) return setError("Pick the winning side.");
     // Every Match needs a Player Logger (spec decision 49). The Log Match page
     // doesn't render this form unbound, so this is a backstop, not a flow.
@@ -174,18 +181,29 @@ export function MatchForm({
     ) {
       return setError("Fill in every set score, or switch set scores off.");
     }
+    const playedAtDate = new Date(playedAt);
+    if (Number.isNaN(playedAtDate.getTime())) {
+      return setError("Pick when the match was played.");
+    }
+    const validation = validateMatchDraft({
+      sides: {
+        A: sideParticipants("A"),
+        B: sideParticipants("B"),
+      },
+      winnerSide: winner,
+      sets: parsedSets,
+      reservedPlayerNames,
+    });
+    if (!validation.ok) return setError(validation.error);
     setError(null);
 
     startTransition(async () => {
       const payload = {
         id: editing ? editing.id : uuidv7(),
-        playedAt: new Date(playedAt).toISOString(),
-        sides: {
-          A: sideParticipants("A"),
-          B: sideParticipants("B"),
-        },
+        playedAt: playedAtDate.toISOString(),
+        sides: validation.sides,
         winnerSide: winner,
-        sets: parsedSets,
+        sets: validation.sets,
       };
       // Offline log queue (spec "PWA & offline"): a log that can't reach the
       // server is queued locally and synced later. Edits stay online-only.
@@ -197,10 +215,17 @@ export function MatchForm({
           ownerPlayerId: loggerId ?? "",
           // Captured now: if this device is later rebound to someone else,
           // the stuck card still has to name whose match it is.
-          ownerPlayerName: (loggerId ? nameOf(loggerId) : null) ?? "You",
+          ownerPlayerName:
+            (loggerId
+              ? nameOf({ kind: "player", playerId: loggerId })
+              : null) ?? "You",
           names: {
-            A: sideValues("A").map((id) => nameOf(id) ?? "Unknown"),
-            B: sideValues("B").map((id) => nameOf(id) ?? "Unknown"),
+            A: payload.sides.A.map(
+              (participant) => nameOf(participant) ?? "Unknown",
+            ),
+            B: payload.sides.B.map(
+              (participant) => nameOf(participant) ?? "Unknown",
+            ),
           },
           queuedAt: new Date().toISOString(),
         });
@@ -224,7 +249,12 @@ export function MatchForm({
   function reset() {
     setPayoff(null);
     setQueued(false);
-    setSlots({ a1: loggerId ?? "", a2: "", b1: "", b2: "" });
+    setSlots({
+      a1: loggerId ? { kind: "player", playerId: loggerId } : null,
+      a2: null,
+      b1: null,
+      b2: null,
+    });
     setWinner(null);
     setRecordSets(false);
     setSets([{ a: "", b: "" }]);
@@ -287,7 +317,16 @@ export function MatchForm({
             aria-pressed={doubles === mode}
             onClick={() => {
               setDoubles(mode);
-              if (!mode) setSlots((s) => ({ ...s, a2: "", b2: "" }));
+              if (!mode) {
+                setSlots((current) => ({
+                  a1:
+                    current.a1?.kind === "guest" ? null : current.a1,
+                  a2: null,
+                  b1:
+                    current.b1?.kind === "guest" ? null : current.b1,
+                  b2: null,
+                }));
+              }
             }}
             className={cn(
               "h-auto flex-1 py-2.5 font-sans text-sm tracking-[2px]",
@@ -312,18 +351,43 @@ export function MatchForm({
             Side {side}
           </div>
           <div className="mt-2.5 flex flex-col gap-2">
-            {slotsFor(side).map((slot) => (
-              <PlayerSelect
-                key={slot}
-                value={slots[slot]}
-                onChange={(id) => setSlots((s) => ({ ...s, [slot]: id }))}
-                options={pickerOptions.filter(
-                  (p) =>
-                    p.id === slots[slot] ||
-                    !Object.values(slots).includes(p.id),
-                )}
-              />
-            ))}
+            {slotsFor(side).map((slot, index) => {
+              const selected = slots[slot];
+              const selectedPlayerIds = new Set(
+                Object.entries(slots).flatMap(([key, participant]) =>
+                  key !== slot && participant?.kind === "player"
+                    ? [participant.playerId]
+                    : [],
+                ),
+              );
+              const otherSideSlotHasGuest = slotsFor(side).some(
+                (candidate) =>
+                  candidate !== slot && slots[candidate]?.kind === "guest",
+              );
+              return (
+                <ParticipantSelect
+                  key={slot}
+                  label={`Side ${side}, participant ${index + 1}`}
+                  value={selected}
+                  onChange={(participant) =>
+                    setSlots((current) => ({
+                      ...current,
+                      [slot]: participant,
+                    }))
+                  }
+                  options={roster.filter(
+                    (player) =>
+                      (selected?.kind === "player" &&
+                        player.id === selected.playerId) ||
+                      !selectedPlayerIds.has(player.id),
+                  )}
+                  allowGuest={
+                    doubles &&
+                    (selected?.kind === "guest" || !otherSideSlotHasGuest)
+                  }
+                />
+              );
+            })}
           </div>
         </fieldset>
       ))}
@@ -352,7 +416,7 @@ export function MatchForm({
                 aria-pressed={winner === side}
                 onClick={() => setWinner(side)}
                 className={cn(
-                  "h-auto min-w-0 flex-1 px-1.5 py-4 font-display text-xl leading-[1.1] font-normal tracking-normal whitespace-normal",
+                  "h-auto min-w-0 flex-1 px-1.5 py-4 font-display text-xl leading-[1.1] font-normal tracking-normal whitespace-normal [overflow-wrap:anywhere]",
                   winner !== side && "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -496,35 +560,76 @@ export function MatchForm({
   );
 }
 
-function guestSlotValue(side: Side, index: number): string {
-  return `guest:${side}:${index}`;
-}
-
-function PlayerSelect({
+function ParticipantSelect({
+  label,
   value,
   onChange,
   options,
+  allowGuest,
 }: {
-  value: string;
-  onChange: (id: string) => void;
+  label: string;
+  value: DraftParticipant;
+  onChange: (participant: DraftParticipant) => void;
   options: RosterEntry[];
+  allowGuest: boolean;
 }) {
-  // SelectValue can't derive the label from an item it has never mounted
-  // (the pre-filled logger renders before the dropdown first opens), so the
-  // selected name is passed as children explicitly.
-  const selectedName = options.find((p) => p.id === value)?.name;
+  const selectValue =
+    value?.kind === "player" ? `player:${value.playerId}` : value ? "guest" : "";
+  const selectedName =
+    value?.kind === "player"
+      ? options.find((player) => player.id === value.playerId)?.name
+      : value
+        ? "Guest"
+        : null;
+
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder="Pick a player">{selectedName}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
-            {p.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="space-y-2">
+      <Select
+        value={selectValue}
+        onValueChange={(next) => {
+          if (next === "guest") {
+            onChange({
+              kind: "guest",
+              name: value?.kind === "guest" ? value.name : "",
+            });
+            return;
+          }
+          onChange({ kind: "player", playerId: next.slice("player:".length) });
+        }}
+      >
+        <SelectTrigger className="w-full" aria-label={label}>
+          <SelectValue placeholder="Pick a participant">
+            {selectedName}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((player) => (
+            <SelectItem key={player.id} value={`player:${player.id}`}>
+              {player.name}
+            </SelectItem>
+          ))}
+          {allowGuest && (
+            <SelectItem value="guest">
+              Guest
+              <span className="ml-2 font-mono text-[9px] tracking-[1px] text-accent">
+                MATCH ONLY
+              </span>
+            </SelectItem>
+          )}
+        </SelectContent>
+      </Select>
+      {value?.kind === "guest" && (
+        <Input
+          value={value.name}
+          maxLength={40}
+          autoComplete="off"
+          aria-label={`${label}, Guest Name`}
+          placeholder="Guest name"
+          onChange={(event) =>
+            onChange({ kind: "guest", name: event.target.value })
+          }
+        />
+      )}
+    </div>
   );
 }

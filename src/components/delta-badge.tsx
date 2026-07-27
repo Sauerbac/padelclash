@@ -1,9 +1,9 @@
 import { Badge } from "@/components/ui/badge";
+import { formatRatingDelta } from "@/lib/rating-format";
 
 /**
  * A rating-delta chip — mono "NAME +12" with a win-green or ember-red
- * outline. The sign comes from the ROUNDED value so a −0.3 delta reads
- * "+0", never "−0".
+ * outline. Rating history is persisted as exact, non-zero integers.
  */
 export function DeltaBadge({
   delta,
@@ -13,12 +13,13 @@ export function DeltaBadge({
   /** Optional prefix inside the chip, e.g. the player's name on feed cards. */
   children?: React.ReactNode;
 }) {
-  const rounded = Math.round(delta);
   return (
-    <Badge variant={rounded >= 0 ? "win" : "loss"}>
+    <Badge
+      variant={delta >= 0 ? "win" : "loss"}
+      className="max-w-full whitespace-normal break-words"
+    >
       {children}
-      {rounded >= 0 ? "+" : "−"}
-      {Math.abs(rounded)}
+      {formatRatingDelta(delta)}
     </Badge>
   );
 }

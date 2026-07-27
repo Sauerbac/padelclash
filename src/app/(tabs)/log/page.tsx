@@ -3,7 +3,7 @@ import { NotJoined } from "@/components/not-joined";
 import { PageHeader } from "@/components/page-header";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
-import { listActivePlayers } from "@/services/players";
+import { listPlayers } from "@/services/players";
 
 export default async function LogMatchPage() {
   // Gate before the query — the roster is private data too.
@@ -11,7 +11,8 @@ export default async function LogMatchPage() {
   if (!access) return <NotJoined />;
 
   const you = access.player;
-  const roster = await listActivePlayers(getDb());
+  const allPlayers = await listPlayers(getDb());
+  const roster = allPlayers.filter((player) => player.retiredAt === null);
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
@@ -20,6 +21,7 @@ export default async function LogMatchPage() {
       {you ? (
         <MatchForm
           roster={roster.map(({ id, name }) => ({ id, name }))}
+          reservedPlayerNames={allPlayers.map(({ name }) => name)}
           loggerId={you.id}
         />
       ) : (

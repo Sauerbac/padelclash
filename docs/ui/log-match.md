@@ -52,12 +52,18 @@ player slots:
 Turning doubles off clears the second picker on both sides. Turning it on does
 not invent additional player selections.
 
-### Player pickers
+### Participant pickers
 
-Each slot is a full-width select control with the placeholder `Pick a player`.
-The active roster is the option source. A player already selected in another
-slot is removed from the other slot’s options, preventing a player from
-appearing twice or on both sides.
+Each slot is a full-width select control with the placeholder
+`Pick a participant`. The active roster is the Player option source. A Player
+already selected in another slot is removed from the other slot’s options,
+preventing a Player from appearing twice or on both sides.
+
+In doubles, a slot may instead be changed to `Guest`, which reveals a
+40-character Guest Name input. At most one Guest is available on each Side and
+the other participant on that Side must remain a roster Player. Guests are not
+offered in singles. A Guest Name is normalized like a Player Name and may not
+collide with another Guest or any active or Retired roster Player.
 
 When creating a match, the bound Logger is preselected in Side A’s first slot.
 The Logger can still be changed because device binding is convenience identity,
@@ -91,8 +97,10 @@ show one score row initially. Each row contains:
 - A remove action once more than one set exists.
 
 Provide an `Add set` action until five sets exist. Each score input accepts
-numeric values from 0 through 99. Every visible score must be filled before
-submission. Set scores are displayed later but do not influence Elo in v1.
+whole numeric values from 0 through 99. Every visible score must be filled and
+have a winner, and the selected Match winner must have won more sets. Set
+scores are displayed later and produce the capped, sign-preserving Rating
+dominance bonus.
 
 ### Played-at date and time
 
@@ -114,9 +122,12 @@ timestamp.
 
 Before calling the server, the form checks:
 
-- Every active player slot has a selection.
+- Every active participant slot has a selection.
 - A winning side is selected.
 - If set scores are enabled, every score row is complete.
+- Every Side contains a Player and at most one Guest.
+- Guest Names are valid and do not collide after normalization.
+- Every set has a winner and agrees with the selected Match winner.
 
 Show validation errors inline near the bottom of the form. The submit action is
 full width and changes its label while pending:
@@ -134,8 +145,9 @@ After a successful new match, replace the form with a result card:
 
 - Title: `Match logged`.
 - Subtitle: `Ratings have been updated.`
-- One row per participant containing the name, rounded rating before, an arrow,
-  rounded rating after, and the signed rating delta.
+- One row per roster Player containing the name, exact integer Rating before,
+  an arrow, exact integer Rating after, and the signed integer delta. Guests
+  receive no Rating output and never appear in the payoff.
 - A `Log another match` action that resets the form to its initial state. The
   Logger is prefilled again and the played-at value returns to now.
 
@@ -159,4 +171,3 @@ the server cannot be reached:
 
 If an edit fails while offline, keep the form visible and show
 `You’re offline — edits need a connection.`
-

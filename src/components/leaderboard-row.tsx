@@ -63,7 +63,7 @@ export function LeaderboardRow({
           "pl-3 text-right font-mono text-[15px] font-semibold",
         )}
       >
-        {Math.round(rating)}
+        {rating}
       </TableCell>
       <TableCell
         className={cn(

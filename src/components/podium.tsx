@@ -112,7 +112,7 @@ function Plinth({
         )}
       </p>
       <p className={cn("mt-0.5 font-mono text-xs font-medium", statColor)}>
-        {Math.round(place.rating)} · {place.wins}–{place.losses}
+        {place.rating} · {place.wins}–{place.losses}
       </p>
       <div
         className={cn(

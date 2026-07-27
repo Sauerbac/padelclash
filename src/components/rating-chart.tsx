@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { formatRatingDelta } from "@/lib/rating-format";
 
 export interface RatingChartPoint {
   /** Local-formatted date label, e.g. "9 Jul" ("Start" for the baseline). */
@@ -129,7 +130,7 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
           <button
             key={c.x}
             type="button"
-            aria-label={`${c.label}: rating ${Math.round(c.rating)}`}
+            aria-label={`${c.label}: rating ${c.rating}`}
             className="absolute size-6 -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${c.x}%`, top: `${c.y}%` }}
             onFocus={() => setActive(i)}
@@ -147,17 +148,16 @@ export function RatingChart({ points }: { points: RatingChartPoint[] }) {
             }}
           >
             <div className="font-mono text-sm font-semibold tabular-nums">
-              {Math.round(coords[active].rating)}
+              {coords[active].rating}
               {coords[active].delta !== null && (
                 <span
                   className={`ml-1 font-medium ${
-                    Math.round(coords[active].delta) >= 0
+                    coords[active].delta >= 0
                       ? "text-win"
                       : "text-destructive"
                   }`}
                 >
-                  {Math.round(coords[active].delta) >= 0 ? "+" : "−"}
-                  {Math.abs(Math.round(coords[active].delta))}
+                  {formatRatingDelta(coords[active].delta)}
                 </span>
               )}
             </div>

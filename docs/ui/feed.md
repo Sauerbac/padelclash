@@ -72,14 +72,15 @@ Each card represents one completed match, laid out as a stack of distinct rows
    sit at the right of this row when the viewer has them.
 2. **Headline.** In both singles and doubles, the winning side and ember-red
    `def.` share the first baseline, while the muted losing side occupies the
-   second row. Each player name is a link to `/players/:id`; doubles sides join
-   names with `&`.
+   second row. Each Player Name is a link to `/players/:id`; doubles sides join
+   names with `&`. A Guest Name is plain, non-linked text followed by a
+   `GUEST` marker.
 3. **Set scores row**, when scores were recorded. One bordered box per set,
    with no redundant label. Scores read winner-first regardless of whether the
    winner was Side A or Side B. Absent entirely for a Simple Result.
-4. **Rating deltas.** One badge per participant, ordered winners first and
-   losers second, each carrying the player name plus a signed rounded delta,
-   such as `Simon +15` or `Casey −15`.
+4. **Rating deltas.** One badge per roster Player, ordered winners first and
+   losers second, each carrying the Player Name plus an exact signed integer
+   delta, such as `Simon +15` or `Casey −15`. Guests never receive a badge.
 5. **Logged-by row**, admin viewers only (spec decision 53). Separated by a
    rule: `LOGGED BY <name>`, the name in gold.
 
