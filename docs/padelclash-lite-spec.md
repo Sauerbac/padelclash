@@ -53,6 +53,27 @@ references them as participant or Logger. Once referenced, the Player may only b
 retired; deleting all referencing Matches makes them deletable again. Restoration moves
 a Retired Player to Not Joined without restoring old access.
 
+### Guest
+
+A named, match-scoped participant who is not on the roster. A Guest has no
+cross-Match identity, profile, Device Binding, enduring Rating, or persistent
+statistics. For one Match's Rating calculation, every Guest receives the mean
+pre-Match Rating of all non-Guest participants as a hidden input. The value is
+never shown, and the Guest receives no Rating output. Every Side must still
+contain at least one Player, so Guests are doubles-only and each Side may
+contain at most one.
+
+A Guest Name uses the same normalization and 40-character limit as a Player
+Name, but is stored only on that Match. It need not be unique across Matches.
+Within a Match it must not collide with another participant's normalized name,
+and it must not collide with any roster Player's normalized name; the Logger
+must add a distinguishing suffix instead. Match surfaces render the name as
+plain text with a Guest marker, never as a Player link or Rating delta.
+
+A rated Match containing a Guest contributes normally to every participating
+Player's win/loss record and to relationship statistics between its roster
+Players. No statistic is created for a relationship with the Guest.
+
 ### Match
 
 A completed contest between two **Sides** with exactly one winner. Never a draw.
@@ -61,11 +82,15 @@ A completed contest between two **Sides** with exactly one winner. Never a draw.
 - `playedAt` — when it was played (client-supplied; defaults to "now" in the form).
 - `loggedAt` — when the server accepted it.
 - `loggedBy` — the Player bound to the logging device (the **Logger**).
-- Sides A and B: 1 player each (singles) or 2 each (doubles). A player appears on
-  exactly one side.
+- Sides A and B contain the same number of participants. Singles is exactly one
+  Player on each Side. Doubles is exactly two participants on each Side, with at
+  least one Player and at most one Guest per Side. A Player appears only once,
+  and every Guest is a distinct match-scoped participant.
 - `winnerSide` — A or B. Always required.
 - Result detail, one of:
-  - **Set Score** — games per set: `6-4, 3-6, 7-5`. Stored, shown, not yet fed into Elo.
+  - **Set Score** — games per set: `6-4, 3-6, 7-5`. Stored, shown, and used as a
+    capped Rating bonus. Every set must have a winner and the declared Match
+    winner must have won more sets.
   - **Simple Result** — winner only, no scores. First-class, not a degraded case.
 
 Every match is competitive (affects ratings). No casual flag, no status field in v1 —
@@ -73,8 +98,13 @@ a deleted match is a deleted row.
 
 ### Rating
 
-A player's Elo number. Derived, never stored authoritatively — see
-[Rating engine](#rating-engine).
+A Player's evolving estimate of competitive padel strength. Derived, never
+stored authoritatively — see [Rating engine](#rating-engine). A Match result
+always determines the direction of movement: every winner's Rating increases
+and every loser's Rating decreases. The Player's own strength, the opposing
+Side's strength, provisional state, and Set Score detail may change only the
+magnitude, never reverse the direction. Rating has no lifetime floor and may
+become negative.
 
 ## Identity & access
 
@@ -202,19 +232,85 @@ the fallback when it opens in a browser instead.
 
 ## Rating engine
 
-The engine is carried over from the old codebase **as-is** — it already lives on this
-branch at `src/domain/rating/` (engine + golden/property tests + fixtures). It is
-framework-free and already implements everything v1 needs:
+The existing framework-free engine at `src/domain/rating/` remains the
+architectural base, but its old `K = 32`, shared Side delta, equal doubles split,
+floating-point output, and result-only behavior are superseded. The live
+design rationale is recorded in
+[ADR 0003](./adr/0003-use-independent-player-elo-for-team-matches.md). The live
+constants are:
 
-- Elo, logistic expected score, divisor 400, starting rating **1000**, constant **K = 32**
-- **win/loss only** — set scores don't influence the delta (v1 decision; a
-  score-aware refinement is the top "Later" item)
-- doubles built in: a Side is 1–2 players, side rating = mean, delta split equally
-- replay: filter → sort by total order **(playedAt, loggedAt, id)** → fold;
-  idempotent, so edits/deletes/late syncs are handled by re-running it
-- outputs both projections: `rating_history` (per participant per match) and
-  `current_rating`; `rankMap()` defines leaderboard ordering in one place
-- ranked threshold: 3 matches to hold a rank
+- starting Rating: **1000**
+- logistic divisor: **400**
+- Established Player factor: **K = 50**
+- Provisional Player factor: **K = 70** for their first three rated Matches
+- final per-Player magnitude: an integer clamped to **1…50**
+- Ranked threshold: three rated Matches; the fourth Match is the first using
+  Established rules
+
+Every Match is evaluated from one immutable snapshot of all participating
+Players' pre-Match state:
+
+1. If the Match contains a Guest, calculate one hidden Guest Rating as the
+   arithmetic mean of every participating Player's pre-Match Rating. Every Guest
+   in that Match uses that same input Rating.
+2. For each Player independently, calculate the opposing Side's mean from its
+   Player Ratings and hidden Guest Rating, if present. The Player's own partner
+   does not enter this expectation.
+3. Calculate the Player's expected score:
+
+   ```text
+   expected = 1 / (1 + 10 ^ ((opposingMean - playerRating) / 400))
+   ```
+
+4. Use `K = 70` when the Player has completed fewer than three prior rated
+   Matches, otherwise `K = 50`. Calculate the unsigned result magnitude:
+
+   ```text
+   base = K × (winner ? 1 - expected : expected)
+   ```
+
+5. A Simple Result has multiplier `1`. For a Set Score, orient all games to the
+   declared winner and calculate:
+
+   ```text
+   dominance = max(0, winnerGames - loserGames) / totalGames
+   multiplier = 1 + 0.4 × dominance
+   ```
+
+6. Calculate `Math.round(base × multiplier)`, clamp it to `1…50`, then apply a
+   positive sign to a winner or negative sign to a loser. All quantities through
+   the clamp use full precision; only the positive final magnitude is rounded.
+7. Emit and persist output only for Players. A Guest receives no history row,
+   match count, or updated Rating. A Guest Match still increments each
+   participating Player's rated Match count.
+
+All Player updates in a Match use the same pre-Match snapshot, so iteration
+order cannot affect the result. The independent expectations are deliberately
+not one shared team win probability and need not be complementary across the
+four participants. Projection data names this value `expectedScore`; it must not
+be presented as a canonical team probability.
+
+Acceptance anchors before score multiplication:
+
+| Scenario | Winner change | Loser change |
+|---|---:|---:|
+| Equal Established Players, Simple Result | `+25` | `−25` |
+| Equal Established Players, `6–0, 6–0` | `+35` | `−35` |
+| 800/1200 Side beats 1000/1000, Simple Result | `+38 / +12` | `−25 / −25` |
+| 800/1200 Side loses to 1000/1000, Simple Result | `+25 / +25` | `−12 / −38` |
+| Equal Provisional Players, Simple Result | `+35` | `−35` |
+| Equal Provisional Players, `6–0, 6–0` | `+49` | `−49` |
+
+The Rating Pool is not conserved. Independent Player updates can create or
+remove Rating, and 1000 is a fixed starting reference rather than an enforced
+circle average. Ratings and final deltas are integers and have no lifetime
+floor; expected scores and the hidden Guest Rating may be fractional.
+
+Replay still filters and sorts by the total order **(playedAt, loggedAt, id)**
+before folding, so edits, deletions, and late syncs are handled by rebuilding.
+It emits `rating_history` for Players who participated and `current_rating` for
+Players seen during replay; `rankMap()` remains the one definition of
+leaderboard ordering.
 
 Keep the synchronous materialized projection approach (restated here as a live
 decision): on every match write/edit/delete, replay the (small) log in the same
@@ -222,9 +318,9 @@ transaction and rewrite the two projection tables. At private-circle scale this
 stays trivially fast forever, and a long-lived container on Coolify has no
 execution-time constraints.
 
-Simplifications when porting: `classification` is always `"competitive"` and `status`
-always `"confirmed"` (keep the fields in the engine's input type untouched to ease
-porting; the app just never sets other values).
+The app supplies only competitive, confirmed Matches. Compatibility fields for
+future casual or confirmation features may remain in the engine input, but they
+do not change the v1 Match model.
 
 ## PWA & offline
 
@@ -272,18 +368,26 @@ See [the deployment runbook](./coolify-deployment.md) and
 The scaffold, deploy plumbing (Dockerfile, compose, CI), and configs are **rebuilt
 from scratch** on this branch — nothing config-level is inherited from the old app.
 
-Suggested tables: `players`, `device_bindings`, `onboarding_invitations`, `matches`,
-`match_participants`, `rating_history`, and `current_rating`. Database constraints enforce
-normalized Player Name uniqueness, at most one active binding per Player, at most one
-valid Personal Link per Player, and at most one valid General Link for the circle. There
-are no user-account tables.
+Suggested tables: `players`, `device_bindings`, `onboarding_invitations`,
+`matches`, `match_participants`, `rating_history`, and `current_rating`.
+`match_participants` represents exactly one identity variant per row: either a
+Player reference or a match-scoped Guest Name. Constraints enforce that exclusive
+choice and the service validates the cross-row Side size and Guest participation
+rules. Database constraints also enforce normalized Player Name uniqueness, at
+most one active binding per Player, at most one valid Personal Link per Player,
+and at most one valid General Link for the circle.
+`rating_history` contains only Player participants; its Rating before/delta/after
+columns and `current_rating.rating` are integers. There are no Guest, shared
+Guest, or user-account tables.
 
 ## What carries over from the old app
 
 Only these, restated here as live decisions:
 
-- `src/domain/rating/` — engine, golden test, property test, fixtures — verbatim
-  (already on this branch).
+- `src/domain/rating/` keeps its framework-free pure-step/replay architecture,
+  golden and property test strategy, stable total ordering, projection outputs,
+  and `rankMap()` boundary. The new Rating formula deliberately replaces the
+  old constants, equal Side-delta split, and fixtures.
 - The test strategy: fast pure-domain tests first (vitest, milliseconds, no
   infrastructure), real-DB integration tests where persistence matters.
 - The layering rule: `domain/` stays framework-free, persistence in `services/`,
@@ -297,28 +401,24 @@ Only these, restated here as live decisions:
 Written down so nothing useful is lost; **none of it is in v1.** Roughly in the order
 they earned interest during the grilling:
 
-1. **Score-aware Elo** — refine the algorithm to weight rating changes by set-score
-   margin. Explicitly flagged "worry about it later"; set scores are already stored,
-   so this is a pure engine change + replay.
-2. **Balancer** — pick who's present, get the fairest team split + win probability.
-   Pure function over ratings; cheapest high-value Later item.
-3. **Tournaments** — Knockout / Round Robin / Americano / Mexicano with standings.
+1. **Balancer** — pick who's present, get the fairest team split plus a separately
+   defined team win probability. Pure function over ratings; cheapest high-value
+   Later item.
+2. **Tournaments** — Knockout / Round Robin / Americano / Mexicano with standings.
    The biggest chunk of old scope; even a one-evening Americano mode is substantial.
-4. **Scheduled matches / RSVP** — planning future matches (WhatsApp covers this today).
-5. **Sessions** — grouping an evening's matches into one meetup entity.
-6. **Venues & courts** — where matches happen.
-7. **Streaks** — consecutive-win/loss tracking on profile/leaderboard.
-8. **Badges / achievements** — milestone awards; a content treadmill.
-9. **Rivalries & challenges** — auto head-to-head narratives, declared grudge matches.
-10. **Result confirmation** — opponent approval before a match is final.
-11. **Notifications / web push** — works on installed iOS PWAs (16.4+); the feed
+3. **Scheduled matches / RSVP** — planning future matches (WhatsApp covers this today).
+4. **Sessions** — grouping an evening's matches into one meetup entity.
+5. **Venues & courts** — where matches happen.
+6. **Streaks** — consecutive-win/loss tracking on profile/leaderboard.
+7. **Badges / achievements** — milestone awards; a content treadmill.
+8. **Rivalries & challenges** — auto head-to-head narratives, declared grudge matches.
+9. **Result confirmation** — opponent approval before a match is final.
+10. **Notifications / web push** — works on installed iOS PWAs (16.4+); the feed
     covers "what happened" until then.
-12. **Casual match flag** — log a match that doesn't affect ratings.
-13. **Data export** — JSON/CSV dump of the match log.
-14. **Offline reads** — cached leaderboard/feed for offline viewing (the write
+11. **Casual match flag** — log a match that doesn't affect ratings.
+12. **Data export** — JSON/CSV dump of the match log.
+13. **Offline reads** — cached leaderboard/feed for offline viewing (the write
     queue is already in v1).
-15. **Provisional K-phase** — accelerated early ratings (K=64 for first matches);
-    the engine's `kFactor()` is the ready extension point.
 
 ## Decision log (2026-07-11)
 
@@ -329,7 +429,7 @@ they earned interest during the grilling:
 | 3 | Identity | No accounts; device-bound players + one admin login |
 | 4 | Device binding | Superseded by secure onboarding decisions 28–55 |
 | 5 | Match model | Singles + doubles; Set Score or Simple Result |
-| 6 | Elo input | Win/loss only in v1; score-aware = Later #1 |
+| 6 | Elo input | **Superseded by decisions 90–109.** Set Scores now provide a capped, sign-preserving Rating bonus; Simple Result remains first-class |
 | 7 | Screens | Tabs: Feed, Log Match, Leaderboard; Player Detail as drill-in |
 | 8 | Stack | Keep Next.js + Postgres + Drizzle on Coolify |
 | 9 | Offline | App-shell cache + offline log queue in v1; offline reads Later |
@@ -453,3 +553,32 @@ they earned interest during the grilling:
 | 87 | Invitation transfer into installed PWAs | Every unbound installed PWA accepts a pasted same-site full `/join/{token}` URL or the existing raw token, then reuses the ordinary preview and explicit confirmation flow so the binding is minted in that PWA's cookie store. No human-sized short-code credential is introduced. An iOS browser shows non-blocking recovery guidance above the normal join flow: copy the full link into the installed PWA first; alternatively accept it in Safari, remove the old Home Screen app, and reinstall from Safari. Android receives no uninstall guidance because link capture may open the PWA directly and paste remains the cross-browser fallback |
 | 88 | Mobile page overflow | The application must not expose page-level horizontal scrolling at supported phone widths. Fix the element that exceeds the viewport rather than relying only on a global clipping rule; deliberately scrollable controls may retain local overflow |
 | 89 | Active rail under the Log plate | The active outer tab's red rail continues to the navigation centreline beneath the raised Log plate, which masks the inner end. This reverses decision 86's stop-at-the-plate-edge rule: the uninterrupted band reads more cleanly than a precisely measured gap beside the rotated plate |
+| 90 | Rating direction invariant | A Match winner always gains Rating and a loser always loses Rating. The Player's own strength, the opposing Side's strength, provisional state, and Set Score detail may scale the magnitude but never reverse its sign; the circle values an intuitive post-match payoff over the extra predictive information of rewarding an above-expectation loss or penalizing an underwhelming win |
+| 91 | Rating responsiveness | The rating refinement will make results genuinely move the Rating and leaderboard faster, not merely multiply the displayed units. An ordinary unscored Match between established 1000-rated Players changes every participant by exactly 25 Rating points: `+25 / −25` in singles and `+25 / +25 / −25 / −25` in doubles. This calibration point is behavior, not merely presentation |
+| 92 | Rating Pool conservation | The Rating Pool is not conserved. Each Player receives an independent Elo update against the opposing Side's mean Rating, following the battle-tested Age of Empires II team-Elo model: a lower-rated winner gains more than their higher-rated partner, while a higher-rated loser loses more than their lower-rated partner. The sum of gains need not equal the sum of losses, and 1000 remains a starting reference rather than an enforced circle average |
+| 93 | Set Score direction and incentive | A Simple Result receives the normal Elo movement. Recording Set Scores can only preserve or increase that magnitude, never reduce it: a close scored result is worth approximately the Simple Result, while greater dominance earns a capped bonus. This sign-preserving, bonus-only rule prevents Players from gaining an advantage by omitting an inconveniently close score |
+| 94 | Set Score dominance | Set Score dominance is `max(0, winnerGames − loserGames) / totalGames`, aggregated across every recorded set and oriented to the declared winner. It varies continuously from zero to one and uses every recorded game. If a declared Match winner won fewer total games, the score bonus is zero but the normal positive win movement remains |
+| 95 | Set Score maximum bonus | Set Score dominance multiplies every participant's independently calculated Elo magnitude by at most `1.4`. A complete shutout between equally rated established Players therefore changes each Rating by 35 instead of the Simple Result's 25; the shared multiplier preserves the weaker-winner and stronger-loser ordering |
+| 96 | Set Score bonus curve | The score multiplier grows linearly as `1 + 0.4 × dominance`. For equally rated established Players, representative changes are approximately 25 for `7–6, 6–7, 7–6`, 27 for `6–4, 6–4`, 30 for `6–2, 6–2`, and 35 for `6–0, 6–0` |
+| 97 | Per-Match Rating cap | After every factor and multiplier is applied, each Player's final signed Rating change is capped at `±50` per Match. This is universal, including provisional Players: no upset, shutout, teammate gap, or newcomer rule may move one Player farther in a single result |
+| 98 | Shared format Rating | Singles and doubles update the same Player Rating and the same leaderboard. The individual-versus-opposing-average doubles formula reduces to ordinary head-to-head Elo for singles, and an ordinary balanced unscored Match produces the same per-Player `±25` baseline in either format |
+| 99 | One-off Guest Rating | A Guest is a named, match-scoped participant rather than a roster Player. For that Match only, every Guest receives a hidden Rating equal to the arithmetic mean of all non-Guest participants' pre-Match Ratings. Only real Players receive Rating outputs; the Guest never receives a profile, Device Binding, leaderboard entry, or cross-Match history |
+| 100 | Provisional boundary | A persistent Player is Provisional for their first three rated Matches and becomes Established immediately after completing the third; their fourth Match uses the standard rules. Provisional status and match count are derived during replay, so edits and deletions can move the boundary. This reuses the existing three-Match threshold before a Player qualifies for leaderboard rank |
+| 101 | Provisional update speed | **Superseded by decision 118.** The initial design used `K = 100` during each of a Player's first three rated Matches, producing a raw `±50` change at equal Rating |
+| 102 | Established Players in placement Matches | Provisional status affects only the Provisional Player's own update. Every Established Player always uses the normal `K = 50`, even when a teammate or opponent is Provisional; there is no reduced-impact or protection rule for the established participants |
+| 103 | Rating expectation curve | The individual Elo expectation retains the classic 400-point logistic divisor. With established `K = 50`, an unscored win before the final cap is worth approximately 25 at equal Rating, 18 when the Player is 100 above the opposing Side's mean, 32 when 100 below, 12 when 200 above, and 38 when 200 below; losses mirror those magnitudes |
+| 104 | Persistent Player starting Rating | Every persistent Player starts at the fixed Rating of 1000, regardless of the current Rating Pool or circle average. The three Provisional Matches, rather than a moving initial seed, place newcomers; the match-scoped mean used for a Guest remains a separate rule |
+| 105 | Guest Matches during placement | A rated Match containing a Guest counts toward every participating Provisional Player's three-Match placement phase. It moves their Rating with the current Provisional factor and universal `±50` cap like any other placement Match; there is no separate confidence or match-count rule for Guest participation |
+| 106 | Rating migration | The new rating algorithm applies by replaying the complete historical Match log, not only Matches recorded after deployment. Historical feed deltas, each Player's first three Provisional updates, Set Score bonuses, Rating charts, and the current leaderboard are all recalculated under one formula; no permanent algorithm-version cutover or mixed-scale history is retained. At design time the log contains only four Matches, all Simple Results, so no legacy Set Score fallback is required. Recheck that fact immediately before rollout; any Set Scores added in the meantime must satisfy the normal consistency rules |
+| 107 | Set Score consistency | A scored Match is valid only when every recorded set has a winner and the declared Match winner won more sets than the loser. Nonstandard completed scores such as `9–7` or `21–15` remain allowed within the existing numeric and set-count bounds; contradictory or incomplete scores must be corrected or entered as a Simple Result and never feed the dominance bonus |
+| 108 | Per-Match Rating floor | After every expectation, provisional factor, and Set Score multiplier is applied, each real Player's final signed Rating change has an absolute minimum of 1 and the existing maximum of 50. Every winner therefore gains at least `+1` and every loser loses at least `−1`; the engine cannot produce a change that the integer UI renders as `±0` |
+| 109 | Integer Rating arithmetic | A Player's final positive Rating-change magnitude is rounded to the nearest whole point, clamped to `1…50`, and then given the win/loss sign before it is applied. Player Ratings, history deltas, and before/after values therefore remain integers and exactly match every UI surface; expected probabilities and hidden Guest means may remain fractional calculation inputs |
+| 110 | Guest participation boundary | Every Side must contain at least one roster Player. Guests are therefore doubles-only, with at most one Guest on each Side; singles remains Player versus Player. A doubles Match may contain zero, one, or two Guests, and two Guests must be opponents rather than partners |
+| 111 | Guest Match records | A rated Match containing one or two Guests contributes normally to every participating roster Player's win/loss record. Guests have no persistent statistics or cross-Match record, so only the roster Players' records change |
+| 112 | Guest Match relationship statistics | Guest Matches update head-to-head and partnership statistics normally wherever both members of the relationship are roster Players. No head-to-head or partnership record is created for a Guest; for example, in `Anna + Guest` versus `Ben + Carla`, Anna records Ben and Carla as opponents and Ben and Carla's partnership record updates |
+| 113 | Rating range | A Player's lifetime Rating has no hard minimum and may become negative. The fixed 1000 starting Rating and universal per-Match cap make that outcome remote, while an unbounded scale preserves the invariant that every loss costs at least one point without a special case at zero |
+| 114 | Provisional score ceiling | **Superseded by decision 118.** Under the initial `K = 100` design, an equally rated Provisional Player already reached `±50` from a Simple Result, so a shutout could not move them farther |
+| 115 | Match evaluation snapshot | Every Player's independent expectation and Guest input is calculated from one pre-Match Rating snapshot. A Player is compared only with the opposing Side's mean; the teammate's Rating does not directly enter that Player's expectation, and participant iteration order cannot change the outcome. The projected value is called `expectedScore`, not team win probability, because the independent Player expectations need not be complementary |
+| 116 | Guest Name and presentation | A Guest Name uses Player Name normalization and its 40-character limit but has no cross-Match uniqueness. Within its Match it may not collide with another participant or any roster Player after normalization. Match surfaces show it as non-linked text with a Guest marker and never reveal a hidden Rating or Rating delta |
+| 117 | Guest uncertainty trade-off | A Guest's actual skill is deliberately not estimated or persisted. Using the participating Players' mean is a neutral one-Match approximation that can misrate an unusually strong or weak Guest; the private circle's trust model and universal `±50` cap are accepted safeguards, and no extra protection rule is added for Established Players |
+| 118 | Provisional K adjustment | The Provisional factor is reduced from `K = 100` to `K = 70` for each Player's first three rated Matches. Against an equally rated opposing Side, a Simple Result now moves a Provisional Player by `±35`, while a complete `6–0, 6–0` shutout moves them by `±49`. Established Players remain at `K = 50`, the Provisional boundary remains three completed rated Matches, and the universal `±50` cap remains unchanged |

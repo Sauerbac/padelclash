@@ -39,3 +39,27 @@ _Avoid_: Group admin, player admin role
 **Retired Player**:
 A former roster member who remains part of match history but cannot join or participate in new matches.
 _Avoid_: Deleted player
+
+**Rating**:
+A Player's evolving estimate of competitive padel strength within the circle. It is a measurement, not participation credit or spendable progression, and has no lifetime floor.
+_Avoid_: XP, season points, reward points
+
+**Rating Pool**:
+The sum of every Player's Rating in the circle. It may grow or shrink; it is not conserved around the Players' starting Ratings.
+_Avoid_: Total points, point supply
+
+**Expected Score**:
+A Player-specific Elo input calculated from that Player's Rating and the opposing Side's mean pre-Match Rating. It is not a shared team probability.
+_Avoid_: Team win probability, match odds
+
+**Guest**:
+A named, match-scoped participant who is not on the circle's roster. A Guest has no cross-Match identity, profile, Device Binding, enduring Rating, or persistent statistics. A rated Guest Match still contributes normally to each participating Player's win/loss record and to relationships between roster Players, but never creates a relationship statistic with the Guest.
+_Avoid_: Temporary Player, Guest account, shared Guest
+
+**Provisional Player**:
+A Player who has completed fewer than three rated Matches. Their Rating is still being placed and follows accelerated update rules.
+_Avoid_: Guest, new account
+
+**Established Player**:
+A Player who has completed at least three rated Matches. Their Rating follows the standard update rules and qualifies for leaderboard rank.
+_Avoid_: Verified Player, veteran
