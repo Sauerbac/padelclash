@@ -52,13 +52,20 @@ export default function RootLayout({
       lang="en"
       className={`${anton.variable} ${barlow.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex h-full flex-col overflow-hidden">
         <SwRegister />
         {/* Order matters: SessionWatch may discover the binding is gone, and
             a queue flush against a revoked credential is wasted work. */}
         <SessionWatch />
         <OfflineSync />
-        {children}
+        {/* The app's only scroller. See globals.css: iOS won't let us hide the
+            document scroll indicator, but it honours the CSS on this one. */}
+        <div
+          id="scroll-root"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto [-webkit-overflow-scrolling:touch]"
+        >
+          {children}
+        </div>
       </body>
     </html>
   );

@@ -79,6 +79,31 @@
   body {
     @apply bg-background font-sans text-foreground;
   }
+
+  /*
+   * No scroll indicators anywhere. On iOS the *document's* indicator is drawn
+   * by the native scroll view and ignores CSS entirely, so the document must
+   * not scroll at all: html/body are locked to the viewport and scrolling
+   * happens inside #scroll-root (root layout), where these rules do apply.
+   * `overflow: hidden` here is also what stops the standalone-PWA rubber band
+   * — deliberately not `overscroll-behavior: none`, which iOS WebKit reads as
+   * "no inertia" and leaves scrolling dead the moment the finger lifts.
+   */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
 }
 
 /* Mono kicker line above page titles ("YOUR CLUB. YOUR RECEIPTS."). */
