@@ -17,7 +17,10 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { CopyLinkButton } from "@/components/admin/copy-link-button";
+import {
+  CopyLinkButton,
+  copyInvitationLink,
+} from "@/components/admin/copy-link-button";
 import { Input } from "@/components/ui/input";
 import type { RosterEntry } from "@/services/players";
 
@@ -36,6 +39,18 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
     startTransition(async () => {
       const result = await action();
       if (!result.ok) setError(result.error);
+    });
+  }
+
+  function generateInvite() {
+    setError(null);
+    startTransition(async () => {
+      const result = await generatePersonalLinkAction(entry.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await copyInvitationLink(`/join/${result.link.token}`);
     });
   }
 
@@ -115,9 +130,7 @@ export function PlayerRow({ entry }: { entry: RosterEntry }) {
                 : "Creates a single-use link that expires in 7 days. Any previous link stops working."
             }
             confirmLabel="Generate link"
-            onConfirm={() =>
-              run(async () => generatePersonalLinkAction(entry.id))
-            }
+            onConfirm={generateInvite}
           />
         )}
 

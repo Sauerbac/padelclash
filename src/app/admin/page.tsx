@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { logoutAction } from "@/app/actions/admin";
 import { AdminLogin } from "@/components/admin/admin-login";
 import { CreatePlayerForm } from "@/components/admin/create-player-form";
@@ -34,16 +35,21 @@ export default async function AdminPage() {
         kicker="The commissioner"
         title="Admin"
         actions={
-          <form action={logoutAction}>
-            <Button
-              variant="outline"
-              size="xs"
-              type="submit"
-              className="text-muted-foreground"
-            >
-              Log out
+          <div className="flex items-center gap-1.5">
+            <Button asChild variant="outline" size="xs">
+              <Link href="/">Back to app</Link>
             </Button>
-          </form>
+            <form action={logoutAction} className="flex">
+              <Button
+                variant="outline"
+                size="xs"
+                type="submit"
+                className="text-muted-foreground"
+              >
+                Log out
+              </Button>
+            </form>
+          </div>
         }
       />
 

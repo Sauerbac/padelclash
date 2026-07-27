@@ -8,7 +8,10 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { CopyLinkButton } from "@/components/admin/copy-link-button";
+import {
+  CopyLinkButton,
+  copyInvitationLink,
+} from "@/components/admin/copy-link-button";
 import type { LinkDetails } from "@/services/onboarding";
 
 /**
@@ -38,6 +41,18 @@ export function GeneralLinkControl({
     startTransition(async () => {
       const result = await action();
       if (!result.ok) setError(result.error ?? "That didn't work.");
+    });
+  }
+
+  function generate() {
+    setError(null);
+    startTransition(async () => {
+      const result = await generateGeneralLinkAction();
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      await copyInvitationLink(`/join/${result.link.token}`);
     });
   }
 
@@ -93,7 +108,7 @@ export function GeneralLinkControl({
             variant="chip"
             size="xs"
             disabled={pending}
-            onClick={() => run(generateGeneralLinkAction)}
+            onClick={generate}
           >
             {pending ? "Generating…" : "Generate link"}
           </Button>

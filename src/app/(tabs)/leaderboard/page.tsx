@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { LeaderboardRow } from "@/components/leaderboard-row";
 import { PageHeader } from "@/components/page-header";
 import { Podium, type PodiumPlace } from "@/components/podium";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -43,7 +45,17 @@ export default async function LeaderboardPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
-      <PageHeader kicker="The pecking order" title="Rankings" />
+      <PageHeader
+        kicker="The pecking order"
+        title="Rankings"
+        actions={
+          access.isAdmin ? (
+            <Button asChild variant="outline" size="xs">
+              <Link href="/admin">Admin panel</Link>
+            </Button>
+          ) : undefined
+        }
+      />
 
       {entries.length === 0 ? (
         <p className="text-[15px] font-semibold text-muted-foreground">
