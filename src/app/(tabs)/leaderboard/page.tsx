@@ -12,7 +12,7 @@ import { NotJoined } from "@/components/not-joined";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
 import { getLeaderboard } from "@/services/matches";
-import { DEFAULT_RANKED_THRESHOLD } from "@/domain/rating/engine";
+import { RATED_THRESHOLD } from "@/domain/rating/engine";
 
 export default async function LeaderboardPage() {
   // Gate before the query — see viewerForPrivateRead.
@@ -86,7 +86,7 @@ export default async function LeaderboardPage() {
           )}
           {hasUnranked && (
             <p className="mt-2 text-sm font-semibold text-muted-foreground">
-              — players need {DEFAULT_RANKED_THRESHOLD} matches to hold a
+              — players need {RATED_THRESHOLD} matches to hold a
               rank. No shortcuts.
             </p>
           )}

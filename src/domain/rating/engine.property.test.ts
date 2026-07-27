@@ -19,16 +19,27 @@ describe("replay invariants", () => {
     expect(serializeProjection(projectGroup(shuffle(log, seed + 11)))).toBe(reference);
   });
 
-  it.each(SEEDS)("always emits signed integer changes in the range 1…50 for seed %i", (seed) => {
+  // There is no upper bound on a change (decision 119) — K is the only bound,
+  // so the invariants left are integrality, the floor, the sign, and that a
+  // Rating is exactly the sum of its own deltas.
+  it.each(SEEDS)("always emits signed integer changes of at least 1 for seed %i", (seed) => {
     const log = randomSinglesLog(seed);
     const winnerByMatch = new Map(log.map((entry) => [entry.id, entry.winnerSide]));
     const { ratingHistory } = projectGroup(log);
     for (const row of ratingHistory) {
       expect(Number.isInteger(row.delta)).toBe(true);
       expect(Math.abs(row.delta)).toBeGreaterThanOrEqual(1);
-      expect(Math.abs(row.delta)).toBeLessThanOrEqual(50);
       expect(row.side === winnerByMatch.get(row.matchId) ? row.delta : -row.delta).toBeGreaterThan(0);
       expect(row.ratingAfter).toBe(row.ratingBefore + row.delta);
+    }
+  });
+
+  // The taper is the only thing that makes K vary, so a Player's very first
+  // rated Match must always be their largest possible move at equal odds.
+  it.each(SEEDS)("never exceeds the first-placement bound of 112 for seed %i", (seed) => {
+    const { ratingHistory } = projectGroup(randomSinglesLog(seed));
+    for (const row of ratingHistory) {
+      expect(Math.abs(row.delta)).toBeLessThanOrEqual(112);
     }
   });
 

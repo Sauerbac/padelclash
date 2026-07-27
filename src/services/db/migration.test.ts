@@ -10,10 +10,7 @@ import os from "node:os";
 import { hasDatabase } from "./test-db";
 import { migrationsFolder } from "./migrate";
 import type { Db } from "./index";
-import {
-  ratingRolloutPreflight,
-  rebuildRatingProjections,
-} from "../matches";
+import { rebuildRatingProjections } from "../matches";
 
 /**
  * The secure cutover of spec decision 55, exercised the only way that proves
@@ -244,10 +241,6 @@ describe.skipIf(!hasDatabase)("secure onboarding migration", () => {
     ]);
 
     const typedDb = db as unknown as Db;
-    expect(await ratingRolloutPreflight(typedDb)).toEqual({
-      matches: 1,
-      scoredMatches: 0,
-    });
     await rebuildRatingProjections(typedDb);
 
     const projection = (await db.execute(sql`
@@ -263,28 +256,36 @@ describe.skipIf(!hasDatabase)("secure onboarding migration", () => {
         is_provisional: boolean;
       }[];
     };
+    // First rated Match, so both sit at the top of the K taper: 80 / 2 = 40.
     expect(projection.rows).toEqual([
       {
         player_id: simon.id,
-        rating: 1035,
+        rating: 1040,
         competitive_matches_played: 1,
         is_provisional: true,
       },
       {
         player_id: alex.id,
-        rating: 965,
+        rating: 960,
         competitive_matches_played: 1,
         is_provisional: true,
       },
     ]);
 
+    // A contradictory Set Score reaching the engine — the declared winner is
+    // behind on both games and sets — degrades to plain win/loss movement
+    // rather than refusing to replay (decision 121). This is the case the
+    // retired boot preflight used to treat as fatal.
     await db.execute(sql`
       update matches
          set sets = '[{"a":6,"b":4},{"a":3,"b":6},{"a":4,"b":6}]'::jsonb
        where id = ${matchId}
     `);
-    await expect(ratingRolloutPreflight(typedDb)).rejects.toThrow(
-      new RegExp(matchId),
-    );
+    await rebuildRatingProjections(typedDb);
+
+    const afterContradiction = (await db.execute(sql`
+      select rating from current_rating where player_id = ${simon.id}
+    `)) as unknown as { rows: { rating: number }[] };
+    expect(afterContradiction.rows).toEqual([{ rating: 1040 }]);
   });
 });

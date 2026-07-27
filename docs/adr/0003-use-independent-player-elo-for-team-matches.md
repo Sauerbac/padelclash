@@ -12,6 +12,11 @@ desired teammate asymmetry or add machinery the private circle does not need.
 
 The deliberate consequences are that the Rating Pool may grow or shrink and
 the independent expected scores do not form one canonical team win probability.
-Set Score intensity, provisional K, Guest inputs, rounding, and caps are
+Set Score intensity, the placement K taper, Guest inputs, and rounding are
 specified in `docs/padelclash-lite-spec.md`; the research comparison lives in
 `docs/research/rating-systems.md`.
+
+A per-Match change has no cap (decision 119). An upper bound would clip exactly
+the results this decision exists to reward — the big upset and the shutout —
+so K is left as the only bound. The teammate asymmetry above is therefore
+continuous across the whole range rather than only in the middle of it.

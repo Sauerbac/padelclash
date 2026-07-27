@@ -344,11 +344,20 @@ The grill resolved every branch above:
 - winner always gains and loser always loses;
 - Set Scores add a linear, sign-preserving dominance bonus up to `1.4`;
 - one shared singles/doubles Rating;
-- three Provisional Matches at `K = 70`, affecting only the Provisional
-  Player's own factor while Established Players remain at `K = 50`;
-- a universal integer change range of `1…50`;
+- three placement Matches on a K taper, affecting only the placing Player's own
+  factor while Established Players remain at `K = 50`;
+- integer changes with a floor of 1 and no ceiling;
 - one-off Guests are match-scoped, doubles-only, and use the participating
   Players' mean as a hidden one-Match Rating input.
+
+A follow-up calibration review (spec decisions 119–123) revised two of these
+after the fact. The `±50` per-Match cap was removed: calibrated against an
+earlier `K = 100`, it survived the reduction to `K = 70` without its rationale
+and flattened exactly the upsets and shutouts this model exists to distinguish.
+The flat Provisional `K` became the taper `max(50, 80 − 10n)`, removing the
+perceptible cliff between a Player's third and fourth rated Match. Dominance
+also gained a set-margin weight, because a games-only ratio rated a win that
+dropped a set above a straight-sets win.
 
 The exact formula, validation rules, Guest boundary, migration, and
 presentation semantics live in the authoritative spec rather than this

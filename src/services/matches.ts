@@ -640,6 +640,11 @@ export async function getFeed(db: Db): Promise<FeedMatch[]> {
           (row) => row.playerId === participant.playerId,
         );
         if (!history) {
+          // Total coverage holds only because replayProjections hardcodes
+          // competitive/confirmed. projectGroup filters casual and voided
+          // matches out of the projection, so the day the casual flag ships
+          // (spec Later list) this read needs a Player-without-delta shape —
+          // the one a Guest already uses — not a throw.
           throw new Error(
             `Missing Rating history for Player ${participant.playerId} in Match ${m.id}`,
           );
@@ -814,35 +819,6 @@ export async function rebuildRatingProjections(db: Db): Promise<void> {
     await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
     await replayProjections(tx);
   });
-}
-
-/**
- * Rollout guard for decision 106. Run after schema migration and before the
- * historical replay so a newly-added contradictory Set Score fails loudly
- * instead of silently receiving a dominance multiplier.
- */
-export async function ratingRolloutPreflight(
-  db: Db,
-): Promise<{ matches: number; scoredMatches: number }> {
-  const rows = await db
-    .select({
-      id: matches.id,
-      winnerSide: matches.winnerSide,
-      sets: matches.sets,
-    })
-    .from(matches);
-  let scoredMatches = 0;
-  for (const match of rows) {
-    if (match.sets !== null) scoredMatches++;
-    try {
-      validateSets(match.sets, match.winnerSide);
-    } catch (error) {
-      throw new Error(
-        `Rating rollout preflight failed for Match ${match.id}: ${(error as Error).message}`,
-      );
-    }
-  }
-  return { matches: rows.length, scoredMatches };
 }
 
 async function replayProjections(tx: Db): Promise<void> {

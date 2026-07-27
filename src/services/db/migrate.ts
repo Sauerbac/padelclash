@@ -1,10 +1,6 @@
 import path from "node:path";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { getDb } from "./index";
-import {
-  ratingRolloutPreflight,
-  rebuildRatingProjections,
-} from "../matches";
 
 // The `drizzle/` folder sits next to the server: the repo root in dev, copied
 // into the image next to server.js in the standalone Docker build. Also used
@@ -13,18 +9,15 @@ export function migrationsFolder(): string {
   return path.join(process.cwd(), "drizzle");
 }
 
-// Boot-time migration runner (called from src/instrumentation.ts).
+// Boot-time migration runner (called from src/instrumentation.ts). Schema only:
+// the Rating rebuild is a separate step there, so this module stays inside the
+// database layer instead of reaching up into services/matches.
 export async function runMigrations(): Promise<void> {
   try {
-    const db = getDb();
-    await migrate(db, {
+    await migrate(getDb(), {
       migrationsFolder: migrationsFolder(),
     });
-    const preflight = await ratingRolloutPreflight(db);
-    await rebuildRatingProjections(db);
-    console.log(
-      `Database migrations applied; replayed ${preflight.matches} Matches (${preflight.scoredMatches} scored)`,
-    );
+    console.log("Database migrations applied");
   } catch (err) {
     // The standalone server logs a failed register() but keeps serving; exit
     // explicitly so a bad DATABASE_URL or failed migration can't serve traffic.

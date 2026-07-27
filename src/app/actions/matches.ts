@@ -128,7 +128,14 @@ export async function logMatchAction(
       sets: payload.sets,
     });
   } catch (err) {
-    return { ok: false, code: "invalid", error: (err as Error).message };
+    // Only a validation failure is the payload's fault. Everything else (a
+    // dropped connection, a deadlock) is transient, and reporting it as
+    // "invalid" would tell the queue this match is permanently refused and
+    // invite the Logger to discard a perfectly good result.
+    if (err instanceof MatchValidationError) {
+      return { ok: false, code: "invalid", error: err.message };
+    }
+    throw err;
   }
 
   // An idempotent retry must return the stored match — but only to the Player

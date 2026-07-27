@@ -13,11 +13,18 @@ export type MatchSide = "A" | "B";
 
 export const STARTING_RATING = 1000;
 export const ESTABLISHED_K = 50;
-export const PROVISIONAL_K = 70;
 export const RATING_DIVISOR = 400;
-export const DEFAULT_RANKED_THRESHOLD = 3;
+/**
+ * One number for three things (spec decision 123): how long the K taper runs,
+ * when a Player stops being Provisional, and when they may hold a Rank. They
+ * were separate constants once and had already drifted apart.
+ */
+export const RATED_THRESHOLD = 3;
+/** First-Match K; the taper steps down to ESTABLISHED_K over RATED_THRESHOLD matches. */
+export const PLACEMENT_START_K = 80;
+export const PLACEMENT_STEP_K = 10;
+/** A result never rounds away to nothing (decision 108). There is no ceiling (decision 119). */
 export const MIN_CHANGE = 1;
-export const MAX_CHANGE = 50;
 
 export interface EngineSetScore {
   a: number;
@@ -72,10 +79,17 @@ export function expectedScore(ratingFor: number, ratingAgainst: number): number 
   return 1 / (1 + 10 ** ((ratingAgainst - ratingFor) / RATING_DIVISOR));
 }
 
+/**
+ * The placement taper (decision 120): 80, 70, 60, then 50 forever. Written as a
+ * floored line rather than a lookup so it reaches ESTABLISHED_K exactly at
+ * RATED_THRESHOLD — the taper and the steady state cannot disagree, and there
+ * is no perceptible cliff at the boundary the way a flat Provisional K had.
+ */
 export function kFactor(state: PlayerState): number {
-  return state.competitiveMatchesPlayed < DEFAULT_RANKED_THRESHOLD
-    ? PROVISIONAL_K
-    : ESTABLISHED_K;
+  return Math.max(
+    ESTABLISHED_K,
+    PLACEMENT_START_K - PLACEMENT_STEP_K * state.competitiveMatchesPlayed,
+  );
 }
 
 function stateOf(
@@ -95,20 +109,40 @@ function mean(values: readonly number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+/**
+ * Set Score dominance (decision 121), bonus-only and never below 1.
+ *
+ * Games alone are not dominance: a games-only ratio scored `6-4, 6-4` below
+ * `6-0, 0-6, 6-1`, rewarding the Player who was bagelled in a set over the one
+ * who never dropped one. Weighting by set margin restores that — straight-sets
+ * results keep their full games ratio, and dropping a set cuts the bonus.
+ *
+ * A contradictory Score (winner ahead on games, behind on sets) yields a
+ * negative margin, which clamps to zero and degrades the Match to plain
+ * win/loss movement rather than being rejected.
+ */
 function scoreMultiplier(
   sets: readonly EngineSetScore[] | null,
   winnerSide: MatchSide,
 ): number {
-  if (sets === null) return 1;
+  if (sets === null || sets.length === 0) return 1;
   let winnerGames = 0;
   let loserGames = 0;
+  let winnerSets = 0;
+  let loserSets = 0;
   for (const set of sets) {
-    winnerGames += winnerSide === "A" ? set.a : set.b;
-    loserGames += winnerSide === "A" ? set.b : set.a;
+    const won = winnerSide === "A" ? set.a : set.b;
+    const lost = winnerSide === "A" ? set.b : set.a;
+    winnerGames += won;
+    loserGames += lost;
+    if (won > lost) winnerSets++;
+    else if (lost > won) loserSets++;
   }
   const totalGames = winnerGames + loserGames;
-  const dominance =
+  const gamesRatio =
     totalGames === 0 ? 0 : Math.max(0, winnerGames - loserGames) / totalGames;
+  const setMargin = (winnerSets - loserSets) / sets.length;
+  const dominance = Math.min(1, Math.max(0, gamesRatio * setMargin));
   return 1 + 0.4 * dominance;
 }
 
@@ -146,10 +180,9 @@ export function replayMatch(
       const expected = expectedScore(before.rating, opposingMean[side]);
       const won = match.winnerSide === side;
       const base = kFactor(before) * (won ? 1 - expected : expected);
-      const magnitude = Math.max(
-        MIN_CHANGE,
-        Math.min(MAX_CHANGE, Math.round(base * multiplier)),
-      );
+      // Floor only — an upper bound would clip exactly the upsets and shutouts
+      // this engine exists to reward (decision 119). K is the bound.
+      const magnitude = Math.max(MIN_CHANGE, Math.round(base * multiplier));
       const delta = won ? magnitude : -magnitude;
       const ratingAfter = before.rating + delta;
 
@@ -165,8 +198,7 @@ export function replayMatch(
         ratingBefore: before.rating,
         delta,
         ratingAfter,
-        wasProvisional:
-          before.competitiveMatchesPlayed < DEFAULT_RANKED_THRESHOLD,
+        wasProvisional: before.competitiveMatchesPlayed < RATED_THRESHOLD,
         expectedScore: expected,
         playedAt: match.playedAt,
       });
@@ -186,9 +218,7 @@ export function compareMatches(a: EngineMatch, b: EngineMatch): number {
 
 export function projectGroup(
   matches: readonly EngineMatch[],
-  opts: { rankedThreshold?: number } = {},
 ): GroupProjection {
-  const rankedThreshold = opts.rankedThreshold ?? DEFAULT_RANKED_THRESHOLD;
   const stream = matches
     .filter((match) => match.classification === "competitive" && match.status !== "voided")
     .sort(compareMatches);
@@ -213,9 +243,8 @@ export function projectGroup(
       rating: player.rating,
       competitiveMatchesPlayed: player.competitiveMatchesPlayed,
       matchesSinceReset: player.matchesSinceReset,
-      isProvisional:
-        player.competitiveMatchesPlayed < DEFAULT_RANKED_THRESHOLD,
-      isRanked: player.competitiveMatchesPlayed >= rankedThreshold,
+      isProvisional: player.competitiveMatchesPlayed < RATED_THRESHOLD,
+      isRanked: player.competitiveMatchesPlayed >= RATED_THRESHOLD,
       lastMatchAt: lastMatchAt.get(playerId) ?? null,
     });
   }
