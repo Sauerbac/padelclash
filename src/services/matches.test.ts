@@ -9,6 +9,7 @@ import type { Db } from "./db";
 import type { Player } from "./db/schema";
 import { uuidv7 } from "../lib/uuidv7";
 import { STARTING_RATING } from "../domain/rating/engine";
+import { createMatchLogProjection } from "../domain/match-log-projection";
 import {
   guestParticipant as guest,
   playerParticipant as player,
@@ -23,6 +24,7 @@ import {
   getPlayerDetail,
   logMatch,
   MatchValidationError,
+  readMatchLogSnapshot,
 } from "./matches";
 
 // Real-DB integration tests; skipped when no DATABASE_URL is configured.
@@ -466,6 +468,37 @@ describe.skipIf(!hasDatabase)("matches service", () => {
     const leaderboard = await getLeaderboard(db);
     expect(leaderboard).toHaveLength(4);
     expect(leaderboard.every((e) => e.matchesPlayed === 1)).toBe(true);
+  });
+
+  it("reads Match and Rating rows from one repeatable snapshot during a concurrent write", async () => {
+    const casey = await createPlayer(db, "Casey");
+    await logMatch(db, singles(simon, alex));
+
+    let historyRead!: () => void;
+    const historyWasRead = new Promise<void>((resolve) => {
+      historyRead = resolve;
+    });
+    let releaseReader!: () => void;
+    const readerMayContinue = new Promise<void>((resolve) => {
+      releaseReader = resolve;
+    });
+
+    const snapshotRead = readMatchLogSnapshot(db, async (stage) => {
+      if (stage !== "rating-history") return;
+      historyRead();
+      await readerMayContinue;
+    });
+
+    await historyWasRead;
+    await logMatch(db, singles(casey, simon));
+    releaseReader();
+
+    const snapshot = await snapshotRead;
+    // The writer committed after Rating history was read but before Match rows
+    // were read. Under READ COMMITTED this can produce a Match with no history;
+    // the repeatable snapshot remains wholly pre-write and projects cleanly.
+    expect(createMatchLogProjection(snapshot).feed()).toHaveLength(1);
+    expect(await getFeed(db)).toHaveLength(2);
   });
 
   it("deleting a match replays projections as if it was never logged", async () => {

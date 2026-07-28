@@ -1,4 +1,4 @@
-import { asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { Db } from "./db";
 import {
   currentRating,
@@ -12,12 +12,8 @@ import {
 } from "./db/schema";
 import {
   projectGroup,
-  rankMap,
-  STARTING_RATING,
-  type CurrentRating,
   type EngineMatch,
   type MatchSide,
-  type PlayerId,
 } from "../domain/rating/engine";
 import { canModifyMatch, type MatchActor } from "../domain/edit-rights";
 import {
@@ -25,6 +21,18 @@ import {
   type ValidatedMatchParticipant,
 } from "../domain/match-intake";
 import type { MatchParticipant } from "../domain/match-participant";
+import {
+  createMatchLogProjection,
+  type MatchLogSnapshot,
+} from "../domain/match-log-projection";
+export type {
+  CompanionRecord,
+  FeedMatch,
+  FeedParticipant,
+  LeaderboardEntry,
+  PlayerDetail,
+  RatingPoint,
+} from "../domain/match-log-projection";
 
 export class MatchValidationError extends Error {
   constructor(message: string) {
@@ -286,93 +294,6 @@ function participantInsertRows(
   );
 }
 
-export interface LeaderboardEntry {
-  playerId: string;
-  name: string;
-  rating: number;
-  /** 1-based leaderboard rank; null while below the ranked threshold. */
-  rank: number | null;
-  wins: number;
-  losses: number;
-  matchesPlayed: number;
-}
-
-/**
- * The Leaderboard read (spec "Screens"): every active player — ranked players
- * first in rank order (rankMap is the single definition of ordering), then the
- * unranked below, highest rating first. Players yet to play appear unranked at
- * the starting rating with a 0–0 record.
- */
-export async function getLeaderboard(db: Db): Promise<LeaderboardEntry[]> {
-  const [roster, ratingRows, results] = await Promise.all([
-    db
-      .select()
-      .from(players)
-      .where(isNull(players.retiredAt))
-      .orderBy(asc(players.createdAt)),
-    db.select().from(currentRating),
-    // W–L comes straight from the log, not the projections.
-    db
-      .select({
-        playerId: matchParticipants.playerId,
-        side: matchParticipants.side,
-        winnerSide: matches.winnerSide,
-      })
-      .from(matchParticipants)
-      .innerJoin(matches, eq(matchParticipants.matchId, matches.id)),
-  ]);
-
-  const current = new Map<PlayerId, CurrentRating>(
-    ratingRows.map((r) => [r.playerId, r]),
-  );
-  const ranks = activeRankMap(current, roster);
-
-  const record = new Map<string, { wins: number; losses: number }>();
-  for (const r of results) {
-    if (r.playerId === null) continue;
-    const tally = record.get(r.playerId) ?? { wins: 0, losses: 0 };
-    if (r.side === r.winnerSide) tally.wins++;
-    else tally.losses++;
-    record.set(r.playerId, tally);
-  }
-
-  const entries = roster.map((player) => {
-    const rating = current.get(player.id);
-    const tally = record.get(player.id);
-    return {
-      playerId: player.id,
-      name: player.name,
-      rating: rating?.rating ?? STARTING_RATING,
-      rank: ranks.get(player.id) ?? null,
-      wins: tally?.wins ?? 0,
-      losses: tally?.losses ?? 0,
-      matchesPlayed: rating?.competitiveMatchesPlayed ?? 0,
-    };
-  });
-
-  return entries.sort(
-    (a, b) =>
-      (a.rank ?? Infinity) - (b.rank ?? Infinity) ||
-      b.rating - a.rating ||
-      a.name.localeCompare(b.name),
-  );
-}
-
-/**
- * Rank is a property of the active leaderboard (decision log 2026-07-12):
- * retired players hold no rank and leave no numbering gap, though their
- * ratings stay in the projections and their pages stay reachable.
- */
-function activeRankMap(
-  current: ReadonlyMap<PlayerId, CurrentRating>,
-  activePlayers: { id: string }[],
-): Map<PlayerId, number> {
-  const active = new Set(activePlayers.map((p) => p.id));
-  return rankMap(
-    new Map([...current].filter(([playerId]) => active.has(playerId))),
-  );
-}
-
 export interface MatchWithSides {
   match: Match;
   /** Complete participant list; Guests are plain match-scoped names. */
@@ -453,256 +374,53 @@ export async function getMatch(
   return { match, participants: participants.map(toParticipantRead) };
 }
 
-export type FeedParticipant =
-  | (Extract<MatchParticipantRead, { kind: "player" }> & {
-      ratingBefore: number;
-      delta: number;
-      ratingAfter: number;
-    })
-  | Extract<MatchParticipantRead, { kind: "guest" }>;
-
-export interface FeedMatch {
-  id: string;
-  playedAt: Date;
-  loggedAt: Date;
-  loggedBy: string;
-  /**
-   * Display name for `loggedBy` — the Logger attribution Admin sees (spec
-   * decision 53). Resolved here because the Logger need not be a participant,
-   * so the card's own name list can't be relied on to contain them.
-   */
-  loggedByName: string;
-  winnerSide: MatchSide;
-  sets: SetScore[] | null;
-  participants: FeedParticipant[];
+export async function getFeed(db: Db) {
+  return createMatchLogProjection(await readMatchLogSnapshot(db)).feed();
 }
 
-/**
- * The Feed read (spec "Screens"): every match, newest first by the replay's
- * total order (playedAt, loggedAt, id). Participants and their deltas come
- * straight from rating_history — the projection already holds one row per
- * participant per match. Names join the full roster: retired players keep
- * their name in old matches.
- */
-export async function getFeed(db: Db): Promise<FeedMatch[]> {
-  const [matchRows, participantRows, historyRows, roster] = await Promise.all([
-    db
-      .select()
-      .from(matches)
-      .orderBy(
-        desc(matches.playedAt),
-        desc(matches.loggedAt),
-        desc(matches.id),
-      ),
-    db.select().from(matchParticipants),
-    db.select().from(ratingHistory),
-    db.select().from(players),
-  ]);
-
-  const nameById = new Map(roster.map((p) => [p.id, p.name]));
-  const byMatch = new Map<string, RatingHistoryRow[]>();
-  for (const row of historyRows) {
-    const rows = byMatch.get(row.matchId) ?? [];
-    rows.push(row);
-    byMatch.set(row.matchId, rows);
-  }
-  const participantsByMatch = new Map<string, typeof participantRows>();
-  for (const row of participantRows) {
-    const rows = participantsByMatch.get(row.matchId) ?? [];
-    rows.push(row);
-    participantsByMatch.set(row.matchId, rows);
-  }
-
-  return matchRows.map((m) => ({
-    id: m.id,
-    playedAt: m.playedAt,
-    loggedAt: m.loggedAt,
-    loggedBy: m.loggedBy,
-    loggedByName: nameById.get(m.loggedBy) ?? "Unknown",
-    winnerSide: m.winnerSide,
-    sets: m.sets,
-    participants: (participantsByMatch.get(m.id) ?? [])
-      .sort((a, b) => a.side.localeCompare(b.side) || a.slot - b.slot)
-      .map((participant): FeedParticipant => {
-        if (participant.playerId === null) {
-          return {
-            kind: "guest",
-            name: participant.guestName ?? "Unknown Guest",
-            side: participant.side,
-            slot: participant.slot,
-          };
-        }
-        const history = (byMatch.get(m.id) ?? []).find(
-          (row) => row.playerId === participant.playerId,
-        );
-        if (!history) {
-          // Total coverage holds only because replayProjections hardcodes
-          // competitive/confirmed. projectGroup filters casual and voided
-          // matches out of the projection, so the day the casual flag ships
-          // (spec Later list) this read needs a Player-without-delta shape —
-          // the one a Guest already uses — not a throw.
-          throw new Error(
-            `Missing Rating history for Player ${participant.playerId} in Match ${m.id}`,
-          );
-        }
-        return {
-          kind: "player",
-          playerId: participant.playerId,
-          name: nameById.get(participant.playerId) ?? "Unknown",
-          side: participant.side,
-          slot: participant.slot,
-          ratingBefore: history.ratingBefore,
-          delta: history.delta,
-          ratingAfter: history.ratingAfter,
-        };
-      }),
-  }));
+export async function getLeaderboard(db: Db) {
+  return createMatchLogProjection(await readMatchLogSnapshot(db)).leaderboard();
 }
 
-export interface PlayerDetail {
-  playerId: string;
-  name: string;
-  retired: boolean;
-  rating: number;
-  /** 1-based leaderboard rank; null while below the ranked threshold. */
-  rank: number | null;
-  wins: number;
-  losses: number;
-  /** One point per match in replay (chronological) order — the chart's data. */
-  ratingSeries: RatingPoint[];
-  /** This player's match history, newest first — feed-card shape for reuse. */
-  matches: FeedMatch[];
-  /** Record vs each opponent faced, most-faced first (spec: head-to-head). */
-  headToHead: CompanionRecord[];
-  /** Record with each doubles partner, most-played-with first. */
-  partners: CompanionRecord[];
-}
-
-/** This player's record vs an opponent — or with a doubles partner. */
-export interface CompanionRecord {
-  playerId: string;
-  name: string;
-  wins: number;
-  losses: number;
-}
-
-export interface RatingPoint {
-  matchId: string;
-  playedAt: Date;
-  delta: number;
-  ratingAfter: number;
-}
-
-/**
- * The Player Detail read (spec "Screens"): the full stats package for one
- * player, all derived from the log and the projections. Retired players keep
- * their page (history links to them). Null for unknown or non-uuid ids.
- */
-export async function getPlayerDetail(
-  db: Db,
-  playerId: string,
-): Promise<PlayerDetail | null> {
+export async function getPlayerDetail(db: Db, playerId: string) {
   if (!isUuid(playerId)) return null;
-
-  const [roster, ratingRows, feed] = await Promise.all([
-    db.select().from(players),
-    db.select().from(currentRating),
-    getFeed(db),
-  ]);
-  const player = roster.find((p) => p.id === playerId);
-  if (!player) return null;
-
-  const current = new Map<PlayerId, CurrentRating>(
-    ratingRows.map((r) => [r.playerId, r]),
-  );
-  const rating = current.get(playerId);
-
-  // The player's own matches, newest first (feed order).
-  const played = feed.filter((m) =>
-    m.participants.some((p) => p.kind === "player" && p.playerId === playerId),
-  );
-  const wins = played.filter((m) =>
-    m.participants.some(
-      (p) =>
-        p.kind === "player" &&
-        p.playerId === playerId &&
-        p.side === m.winnerSide,
-    ),
-  ).length;
-
-  return {
-    playerId,
-    name: player.name,
-    retired: player.retiredAt !== null,
-    rating: rating?.rating ?? STARTING_RATING,
-    rank:
-      activeRankMap(
-        current,
-        roster.filter((p) => p.retiredAt === null),
-      ).get(playerId) ?? null,
-    wins,
-    losses: played.length - wins,
-    // The feed is newest-first in the replay's total order, so reversing it
-    // is exactly chronological — late-synced matches sit where they belong.
-    ratingSeries: played
-      .map((m) => {
-        const me = m.participants.find(
-          (p) => p.kind === "player" && p.playerId === playerId,
-        ) as Extract<FeedParticipant, { kind: "player" }>;
-        return {
-          matchId: m.id,
-          playedAt: m.playedAt,
-          delta: me.delta,
-          ratingAfter: me.ratingAfter,
-        };
-      })
-      .reverse(),
-    matches: played,
-    headToHead: companionRecords(played, playerId, "opposite"),
-    partners: companionRecords(played, playerId, "same"),
-  };
+  return createMatchLogProjection(
+    await readMatchLogSnapshot(db),
+  ).playerDetail(playerId);
 }
 
-// Fold the player's matches into per-companion W–L tallies: "opposite" side
-// companions are opponents (head-to-head), "same" side are doubles partners.
-// Most-played-together first, ties by name.
-function companionRecords(
-  played: FeedMatch[],
-  playerId: string,
-  relation: "opposite" | "same",
-): CompanionRecord[] {
-  const records = new Map<string, CompanionRecord>();
-  for (const match of played) {
-    const mySide = match.participants.find(
-      (p) => p.kind === "player" && p.playerId === playerId,
-    )!.side;
-    const won = mySide === match.winnerSide;
-    const companions = match.participants.filter(
-      (participant): participant is Extract<
-        FeedParticipant,
-        { kind: "player" }
-      > =>
-        participant.kind === "player" &&
-        (relation === "opposite"
-          ? participant.side !== mySide
-          : participant.side === mySide &&
-            participant.playerId !== playerId),
-    );
-    for (const c of companions) {
-      const record = records.get(c.playerId) ?? {
-        playerId: c.playerId,
-        name: c.name,
-        wins: 0,
-        losses: 0,
+/**
+ * Load every Match-log read source from one PostgreSQL snapshot. The optional
+ * observer is a concurrency-test seam called after the roster read has
+ * established the snapshot and before the remaining reads.
+ */
+export async function readMatchLogSnapshot(
+  db: Db,
+  observer?: (stage: "roster" | "rating-history") => Promise<void>,
+): Promise<MatchLogSnapshot> {
+  return db.transaction(
+    async (tx) => {
+      const roster = await tx.select().from(players);
+      await observer?.("roster");
+      // One pg connection owns the transaction; run its statements
+      // sequentially rather than queueing concurrent client.query calls.
+      // History intentionally comes before Match rows: the integration test
+      // commits a writer between them and proves REPEATABLE READ keeps both
+      // reads on the same pre-write snapshot.
+      const historyRows = await tx.select().from(ratingHistory);
+      await observer?.("rating-history");
+      const matchRows = await tx.select().from(matches);
+      const participantRows = await tx.select().from(matchParticipants);
+      const ratingRows = await tx.select().from(currentRating);
+      return {
+        players: roster,
+        matches: matchRows,
+        participants: participantRows,
+        ratingHistory: historyRows,
+        currentRatings: ratingRows,
       };
-      if (won) record.wins++;
-      else record.losses++;
-      records.set(c.playerId, record);
-    }
-  }
-  return [...records.values()].sort(
-    (a, b) =>
-      b.wins + b.losses - (a.wins + a.losses) || a.name.localeCompare(b.name),
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
 
