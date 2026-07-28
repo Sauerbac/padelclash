@@ -12,7 +12,7 @@ export interface QueuedMatchPayload {
   ownerPlayerId: string;
 }
 
-export interface QueuedMatch extends QueuedMatchPayload {
+export interface QueuedMatchInput extends QueuedMatchPayload {
   names: Record<MatchSide, string[]>;
   ownerPlayerName: string;
   queuedAt: string;
@@ -20,8 +20,12 @@ export interface QueuedMatch extends QueuedMatchPayload {
   syncCode?: MatchSyncRefusal;
 }
 
+export interface QueuedMatch extends QueuedMatchInput {
+  recordState: "queued";
+}
+
 export interface IncompatibleQueuedMatch {
-  incompatible: true;
+  recordState: "incompatible";
   id: string;
   queuedAt: string;
   ownerPlayerName: string;
@@ -34,7 +38,7 @@ export type QueuedMatchRecord = QueuedMatch | IncompatibleQueuedMatch;
 export function isIncompatibleQueuedMatch(
   match: QueuedMatchRecord,
 ): match is IncompatibleQueuedMatch {
-  return "incompatible" in match;
+  return match.recordState === "incompatible";
 }
 
 /**
@@ -69,6 +73,7 @@ export function decodeQueuedMatch(value: unknown): QueuedMatchRecord | null {
   }
 
   return {
+    recordState: "queued",
     id: value.id,
     playedAt: value.playedAt,
     ownerPlayerId: value.ownerPlayerId,
@@ -88,7 +93,7 @@ function incompatible(
   id: string,
 ): IncompatibleQueuedMatch {
   return {
-    incompatible: true,
+    recordState: "incompatible",
     id,
     queuedAt:
       typeof value.queuedAt === "string"

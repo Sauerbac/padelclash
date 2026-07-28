@@ -2,6 +2,7 @@ import type { MatchSyncRefusal } from "@/domain/sync-policy";
 import type {
   IncompatibleQueuedMatch,
   QueuedMatch,
+  QueuedMatchRecord,
 } from "@/services/offline/queue";
 import type { FeedMatch } from "@/services/matches";
 
@@ -134,6 +135,7 @@ export const FEED_NONE_EDITABLE: FeedMatch[] = FEED.map((match) => ({
 }));
 
 const queuedBase = {
+  recordState: "queued" as const,
   ownerPlayerId: YOU.id,
   ownerPlayerName: YOU.name,
   names: { A: [YOU.name, LONG.name], B: [ALSO_LONG.name, CASEY.name] },
@@ -242,11 +244,25 @@ export const QUEUED_BLOCKED: QueuedMatch = {
 };
 
 export const QUEUED_INCOMPATIBLE: IncompatibleQueuedMatch = {
-  incompatible: true,
+  recordState: "incompatible",
   id: "dddddddd-0001-7000-8000-000000000000",
   queuedAt: hoursAgo(30).toISOString(),
   ownerPlayerName: "Simon",
   syncCode: "invalid",
   syncError:
     "This queued match was saved by an incompatible app version and cannot be synced. Review it, then discard it explicitly.",
+};
+
+/**
+ * Mechanical completeness check for the durable queue-record union. Adding a
+ * record state requires a gallery fixture before TypeScript will pass.
+ */
+export const QUEUED_BY_RECORD_STATE: {
+  [State in QueuedMatchRecord["recordState"]]: Extract<
+    QueuedMatchRecord,
+    { recordState: State }
+  >;
+} = {
+  queued: QUEUED_PENDING,
+  incompatible: QUEUED_INCOMPATIBLE,
 };

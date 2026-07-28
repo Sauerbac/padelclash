@@ -227,7 +227,7 @@ describe("offline lifecycle", () => {
       dependencies({
         listQueuedMatches: vi.fn().mockResolvedValue([
           {
-            incompatible: true,
+            recordState: "incompatible",
             id: "legacy-match",
             queuedAt: "2026-07-22T12:00:00.000Z",
             ownerPlayerName: "Alex",
@@ -336,6 +336,7 @@ function queuedMatch(
   overrides: Partial<QueuedMatch> = {},
 ): QueuedMatch {
   return {
+    recordState: "queued",
     id: "01900000-0000-7000-8000-000000000001",
     playedAt: "2026-07-22T12:00:00.000Z",
     ownerPlayerId: "player-1",

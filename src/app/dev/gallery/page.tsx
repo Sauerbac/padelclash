@@ -4,7 +4,7 @@ import { Case, GalleryPage, Section } from "./chrome";
 import { GALLERY_SECTIONS } from "./registry";
 import {
   QUEUED_BY_REFUSAL,
-  QUEUED_INCOMPATIBLE,
+  QUEUED_BY_RECORD_STATE,
 } from "./feed/fixtures";
 import {
   IncompatibleQueuedMatchCard,
@@ -85,7 +85,9 @@ export default function GalleryIndex() {
           note="generic blocked card — no invented Match facts"
           width={390}
         >
-          <IncompatibleQueuedMatchCard match={QUEUED_INCOMPATIBLE} />
+          <IncompatibleQueuedMatchCard
+            match={QUEUED_BY_RECORD_STATE.incompatible}
+          />
         </Case>
       </Section>
 

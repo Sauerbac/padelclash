@@ -11,7 +11,7 @@ import {
   FEED_NONE_EDITABLE,
   NOW,
   QUEUED_BLOCKED,
-  QUEUED_INCOMPATIBLE,
+  QUEUED_BY_RECORD_STATE,
   QUEUED_PENDING,
   QUEUED_TRANSIENT,
   YOU,
@@ -44,7 +44,9 @@ function queuedFixtures() {
       <QueuedMatchCard match={QUEUED_PENDING} />
       <QueuedMatchCard match={QUEUED_TRANSIENT} />
       <QueuedMatchCard match={QUEUED_BLOCKED} />
-      <IncompatibleQueuedMatchCard match={QUEUED_INCOMPATIBLE} />
+      <IncompatibleQueuedMatchCard
+        match={QUEUED_BY_RECORD_STATE.incompatible}
+      />
     </div>
   );
 }

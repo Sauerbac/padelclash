@@ -47,7 +47,7 @@ export function QueuedMatches() {
     <div className="space-y-3">
       {queued.map((match) => (
         <div key={match.id}>
-          {"incompatible" in match ? (
+          {match.recordState === "incompatible" ? (
             <IncompatibleQueuedMatchCard match={match} />
           ) : (
             <QueuedMatchCard match={match} />

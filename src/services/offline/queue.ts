@@ -4,12 +4,13 @@ import {
 import { QUEUED_MATCHES_STORE, withOfflineStore } from "./db";
 import {
   decodeQueuedMatch,
-  type QueuedMatch,
+  type QueuedMatchInput,
   type QueuedMatchRecord,
 } from "./queue-contract";
 export type {
   IncompatibleQueuedMatch,
   QueuedMatch,
+  QueuedMatchInput,
   QueuedMatchRecord,
 } from "./queue-contract";
 
@@ -39,7 +40,7 @@ function notifyQueueChanged(): void {
 }
 
 /** Adds a match to the queue; an existing record with the same id is replaced. */
-export async function enqueueMatch(match: QueuedMatch): Promise<void> {
+export async function enqueueMatch(match: QueuedMatchInput): Promise<void> {
   await withStore("readwrite", (store) => store.put(match));
   notifyQueueChanged();
 }
@@ -75,7 +76,7 @@ export async function markQueueUnbound(): Promise<void> {
   const queued = await listQueuedMatches();
   if (queued.length === 0) return;
   for (const match of queued) {
-    if ("incompatible" in match) continue;
+    if (match.recordState === "incompatible") continue;
     // Don't overwrite a permanent refusal with a vaguer one.
     if (isPermanentRefusal(match.syncCode)) continue;
     await withStore("readwrite", (store) =>

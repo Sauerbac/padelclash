@@ -166,7 +166,7 @@ describe("offline Match-entry snapshot", () => {
 
     expect(await listQueuedMatches()).toEqual([
       {
-        incompatible: true,
+        recordState: "incompatible",
         id: "01900000-0000-7000-8000-000000000099",
         queuedAt: "2026-07-22T12:00:00.000Z",
         ownerPlayerName: "Alex",
