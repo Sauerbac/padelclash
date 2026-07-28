@@ -1,13 +1,17 @@
 import { FeedView } from "@/components/feed-view";
 import { InvitationEntry } from "@/components/invitation-entry";
 import { NotJoined } from "@/components/not-joined";
-import { QueuedMatchCard } from "@/components/queued-matches";
+import {
+  IncompatibleQueuedMatchCard,
+  QueuedMatchCard,
+} from "@/components/queued-matches";
 import { TabShell } from "@/components/tab-shell";
 import {
   FEED,
   FEED_NONE_EDITABLE,
   NOW,
   QUEUED_BLOCKED,
+  QUEUED_INCOMPATIBLE,
   QUEUED_PENDING,
   QUEUED_TRANSIENT,
   YOU,
@@ -40,6 +44,7 @@ function queuedFixtures() {
       <QueuedMatchCard match={QUEUED_PENDING} />
       <QueuedMatchCard match={QUEUED_TRANSIENT} />
       <QueuedMatchCard match={QUEUED_BLOCKED} />
+      <IncompatibleQueuedMatchCard match={QUEUED_INCOMPATIBLE} />
     </div>
   );
 }

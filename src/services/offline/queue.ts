@@ -5,9 +5,13 @@ import { QUEUED_MATCHES_STORE, withOfflineStore } from "./db";
 import {
   decodeQueuedMatch,
   type QueuedMatch,
-  type QueuedMatchInput,
+  type QueuedMatchRecord,
 } from "./queue-contract";
-export type { QueuedMatch, QueuedMatchInput } from "./queue-contract";
+export type {
+  IncompatibleQueuedMatch,
+  QueuedMatch,
+  QueuedMatchRecord,
+} from "./queue-contract";
 
 /** Fired on window whenever the queue's contents change. */
 export const QUEUE_CHANGED_EVENT = "padelclash:queue-changed";
@@ -35,15 +39,15 @@ function notifyQueueChanged(): void {
 }
 
 /** Adds a match to the queue; an existing record with the same id is replaced. */
-export async function enqueueMatch(match: QueuedMatchInput): Promise<void> {
+export async function enqueueMatch(match: QueuedMatch): Promise<void> {
   await withStore("readwrite", (store) => store.put(match));
   notifyQueueChanged();
 }
 
 /** All queued matches, oldest first (UUIDv7 ids are time-ordered). */
-export async function listQueuedMatches(): Promise<QueuedMatch[]> {
+export async function listQueuedMatches(): Promise<QueuedMatchRecord[]> {
   const all = (await withStore("readonly", (store) => store.getAll())) as unknown[];
-  const queued: QueuedMatch[] = [];
+  const queued: QueuedMatchRecord[] = [];
   for (const stored of all) {
     const decoded = decodeQueuedMatch(stored);
     if (!decoded) continue;
@@ -71,6 +75,7 @@ export async function markQueueUnbound(): Promise<void> {
   const queued = await listQueuedMatches();
   if (queued.length === 0) return;
   for (const match of queued) {
+    if ("incompatible" in match) continue;
     // Don't overwrite a permanent refusal with a vaguer one.
     if (isPermanentRefusal(match.syncCode)) continue;
     await withStore("readwrite", (store) =>

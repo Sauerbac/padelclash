@@ -9,11 +9,11 @@
 import type {
   EngineMatch,
   EngineParticipant,
-  EngineSetScore,
   GroupProjection,
   MatchSide,
   PlayerId,
 } from "./engine";
+import type { SetScore } from "../set-score";
 
 export const player = (playerId: PlayerId): EngineParticipant => ({
   kind: "player",
@@ -35,7 +35,7 @@ export function match(input: {
   winner: MatchSide;
   classification?: "competitive" | "casual";
   status?: EngineMatch["status"];
-  sets?: readonly EngineSetScore[] | null;
+  sets?: readonly SetScore[] | null;
 }): EngineMatch {
   return {
     id: input.id,

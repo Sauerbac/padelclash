@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { MatchSide } from "@/domain/rating/engine";
 import type { MatchParticipant } from "@/domain/match-participant";
+import type { SetScore } from "@/domain/set-score";
 export type { MatchParticipant } from "@/domain/match-participant";
 import type { MatchSyncRefusal } from "@/domain/sync-policy";
 import { UUIDV7_PATTERN } from "@/lib/uuidv7";
@@ -11,7 +12,7 @@ import { requireLogger, requirePrivateRead } from "@/services/auth/authz";
 import { refreshBindingCookie } from "@/services/auth/binding";
 import { clientIp } from "@/services/auth/client-ip";
 import { getDb } from "@/services/db";
-import type { RatingHistoryRow, SetScore } from "@/services/db/schema";
+import type { RatingHistoryRow } from "@/services/db/schema";
 import { AccessDeniedError } from "@/services/errors";
 import {
   deleteMatch,

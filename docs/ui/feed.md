@@ -144,6 +144,11 @@ Transient refusals (no connection, server busy) get the status line only, not
 the Discard action — offering it for those invites people to delete matches
 that were about to sync fine (spec decision 26).
 
+If a durable queue record comes from an incompatible payload shape, the app
+does not invent missing Match facts or hide the record. It renders a generic
+blocked card labelled `Incompatible queued match`, explains that it cannot be
+synced, and offers the same confirmation-guarded explicit Discard.
+
 ## Empty state
 
 When there are no server-synced matches, the page shows

@@ -1,5 +1,8 @@
 import type { MatchSyncRefusal } from "@/domain/sync-policy";
-import type { QueuedMatch } from "@/services/offline/queue";
+import type {
+  IncompatibleQueuedMatch,
+  QueuedMatch,
+} from "@/services/offline/queue";
 import type { FeedMatch } from "@/services/matches";
 
 /**
@@ -236,4 +239,14 @@ export const QUEUED_BLOCKED: QueuedMatch = {
     { a: 6, b: 7 },
     { a: 6, b: 2 },
   ],
+};
+
+export const QUEUED_INCOMPATIBLE: IncompatibleQueuedMatch = {
+  incompatible: true,
+  id: "dddddddd-0001-7000-8000-000000000000",
+  queuedAt: hoursAgo(30).toISOString(),
+  ownerPlayerName: "Simon",
+  syncCode: "invalid",
+  syncError:
+    "This queued match was saved by an incompatible app version and cannot be synced. Review it, then discard it explicitly.",
 };

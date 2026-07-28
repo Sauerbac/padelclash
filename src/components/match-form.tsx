@@ -31,6 +31,7 @@ import {
   validateMatchIntake,
 } from "@/domain/match-intake";
 import type { MatchParticipant } from "@/domain/match-participant";
+import type { SetScore } from "@/domain/set-score";
 
 interface RosterEntry {
   id: string;
@@ -65,7 +66,7 @@ export interface EditableMatch {
   playedAtIso: string;
   sides: Record<Side, MatchParticipant[]>;
   winnerSide: Side;
-  sets: { a: number; b: number }[] | null;
+  sets: SetScore[] | null;
 }
 
 export type MatchFormDraft = Pick<

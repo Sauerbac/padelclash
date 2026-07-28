@@ -14,6 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { SetScore } from "../../domain/set-score";
 
 // Roster of the circle. No accounts: a Player is just a row, and access is a
 // separate artifact (device_bindings below). See spec "Identity & access".
@@ -129,12 +130,6 @@ export const deviceBindings = pgTable(
 );
 
 export const matchSide = pgEnum("match_side", ["A", "B"]);
-
-/** Games per set, side A vs side B — e.g. `{ a: 6, b: 4 }`. */
-export interface SetScore {
-  a: number;
-  b: number;
-}
 
 // The match log — the source of truth (spec "Match"). Ratings are never stored
 // on it; they are derived by replay into the projection tables below.

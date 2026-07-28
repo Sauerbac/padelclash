@@ -5,6 +5,7 @@ import type {
   MatchParticipant as EngineParticipant,
   PlayerParticipant,
 } from "../match-participant";
+import type { SetScore } from "../set-score";
 
 export type { EngineParticipant, GuestParticipant, PlayerParticipant };
 
@@ -26,11 +27,6 @@ export const PLACEMENT_STEP_K = 10;
 /** A result never rounds away to nothing (decision 108). There is no ceiling (decision 119). */
 export const MIN_CHANGE = 1;
 
-export interface EngineSetScore {
-  a: number;
-  b: number;
-}
-
 export interface EngineMatch {
   id: string;
   playedAt: Date;
@@ -39,7 +35,7 @@ export interface EngineMatch {
   status: "pending" | "confirmed" | "contested" | "voided";
   sides: Record<MatchSide, readonly EngineParticipant[]>;
   winnerSide: MatchSide;
-  sets: readonly EngineSetScore[] | null;
+  sets: readonly SetScore[] | null;
 }
 
 export interface PlayerState {
@@ -122,7 +118,7 @@ function mean(values: readonly number[]): number {
  * win/loss movement rather than being rejected.
  */
 function scoreMultiplier(
-  sets: readonly EngineSetScore[] | null,
+  sets: readonly SetScore[] | null,
   winnerSide: MatchSide,
 ): number {
   if (sets === null || sets.length === 0) return 1;

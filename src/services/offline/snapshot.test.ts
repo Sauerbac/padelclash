@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { enqueueMatch, listQueuedMatches } from "./queue";
+import {
+  enqueueMatch,
+  listQueuedMatches,
+  removeQueuedMatch,
+} from "./queue";
+import { isIncompatibleQueuedMatch } from "./queue-contract";
 import { guestParticipant, playerParticipant } from "../../domain/match-participant";
 import {
   clearOfflineMatchSnapshot,
@@ -68,6 +73,7 @@ describe("offline Match-entry snapshot", () => {
         winnerSide: "A",
         sets: null,
         queuedAt: "2026-07-22T12:00:00.000Z",
+        ignoredLegacyField: "safe to ignore",
       });
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
@@ -114,6 +120,11 @@ describe("offline Match-entry snapshot", () => {
     });
 
     const [queued] = await listQueuedMatches();
+    expect(queued).toBeDefined();
+    expect(isIncompatibleQueuedMatch(queued)).toBe(false);
+    if (!queued || isIncompatibleQueuedMatch(queued)) {
+      throw new Error("Expected a compatible queued Match");
+    }
     expect(queued.sides).toEqual({
       A: [
         { kind: "player", playerId: "player-1" },
@@ -124,5 +135,47 @@ describe("offline Match-entry snapshot", () => {
         { kind: "player", playerId: "player-3" },
       ],
     });
+  });
+
+  it("surfaces an incompatible durable record for explicit discard", async () => {
+    await saveOfflineMatchSnapshot(
+      createOfflineMatchSnapshot(
+        { id: "player-1", name: "Alex" },
+        [{ id: "player-1", name: "Alex" }],
+        ["Alex"],
+      ),
+    );
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("padelclash-offline", 2);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction("queued-matches", "readwrite");
+      transaction.objectStore("queued-matches").put({
+        id: "01900000-0000-7000-8000-000000000099",
+        queuedAt: "2026-07-22T12:00:00.000Z",
+        ownerPlayerName: "Alex",
+        // Pre-discriminated participant shape: intentionally incompatible.
+        sides: { A: ["player-1"], B: ["player-2"] },
+      });
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    db.close();
+
+    expect(await listQueuedMatches()).toEqual([
+      {
+        incompatible: true,
+        id: "01900000-0000-7000-8000-000000000099",
+        queuedAt: "2026-07-22T12:00:00.000Z",
+        ownerPlayerName: "Alex",
+        syncCode: "invalid",
+        syncError: expect.stringContaining("incompatible app version"),
+      },
+    ]);
+
+    await removeQueuedMatch("01900000-0000-7000-8000-000000000099");
+    expect(await listQueuedMatches()).toEqual([]);
   });
 });

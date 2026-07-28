@@ -8,7 +8,6 @@ import {
   ratingHistory,
   type Match,
   type RatingHistoryRow,
-  type SetScore,
 } from "./db/schema";
 import {
   projectGroup,
@@ -21,6 +20,7 @@ import {
   type ValidatedMatchParticipant,
 } from "../domain/match-intake";
 import type { MatchParticipant } from "../domain/match-participant";
+import type { SetScore } from "../domain/set-score";
 import {
   createMatchLogProjection,
   type MatchLogSnapshot,

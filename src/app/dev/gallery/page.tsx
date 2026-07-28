@@ -2,8 +2,14 @@ import Link from "next/link";
 import { DeleteActionCases } from "./action-cases";
 import { Case, GalleryPage, Section } from "./chrome";
 import { GALLERY_SECTIONS } from "./registry";
-import { QUEUED_BY_REFUSAL } from "./feed/fixtures";
-import { QueuedMatchCard } from "@/components/queued-matches";
+import {
+  QUEUED_BY_REFUSAL,
+  QUEUED_INCOMPATIBLE,
+} from "./feed/fixtures";
+import {
+  IncompatibleQueuedMatchCard,
+  QueuedMatchCard,
+} from "@/components/queued-matches";
 import { isPermanentRefusal, type MatchSyncRefusal } from "@/domain/sync-policy";
 
 /**
@@ -66,6 +72,21 @@ export default function GalleryIndex() {
             </li>
           ))}
         </ul>
+      </Section>
+
+      <Section
+        id="incompatible-queue-record"
+        title="Incompatible queued data"
+        note="A durable record whose payload shape cannot be decoded stays visible and requires explicit Discard."
+      >
+        <Case
+          id="incompatible-queued-match"
+          title="decoder refusal"
+          note="generic blocked card — no invented Match facts"
+          width={390}
+        >
+          <IncompatibleQueuedMatchCard match={QUEUED_INCOMPATIBLE} />
+        </Case>
       </Section>
 
       <Section

@@ -1,5 +1,9 @@
 import { handleRefusal, isPermanentRefusal } from "../../domain/sync-policy";
-import type { QueuedMatch } from "./queue-contract";
+import {
+  isIncompatibleQueuedMatch,
+  type QueuedMatch,
+  type QueuedMatchRecord,
+} from "./queue-contract";
 
 export interface OfflineSessionStatus {
   bound: boolean;
@@ -26,7 +30,7 @@ export interface OfflineLifecycleDependencies {
   markQueueUnbound(): Promise<void>;
   clearSnapshot(): Promise<void>;
   refreshSnapshot(player: { id: string; name: string }): Promise<void>;
-  listQueuedMatches(): Promise<QueuedMatch[]>;
+  listQueuedMatches(): Promise<QueuedMatchRecord[]>;
   submitMatch(match: QueuedMatch): Promise<QueueSubmissionResult>;
   noteRefusal(
     match: QueuedMatch,
@@ -81,7 +85,11 @@ export function createOfflineLifecycle(
         dependencies.cleanupLatch.clear();
       }
       if (status.revoked) dependencies.notifyRevoked();
-      return;
+      // A rebind can arrive while cleanup is still owed from the revoked
+      // credential. Once cleanup succeeds, continue this same contact through
+      // snapshot refresh and queue drain; waiting for another browser event
+      // would leave a successfully rebound installation idle.
+      if (dependencies.cleanupLatch.pending()) return;
     }
 
     if (!status.bound || !status.player) return;
@@ -94,6 +102,7 @@ export function createOfflineLifecycle(
 
     let synced = false;
     for (const match of await dependencies.listQueuedMatches()) {
+      if (isIncompatibleQueuedMatch(match)) continue;
       if (isPermanentRefusal(match.syncCode)) continue;
 
       let result: QueueSubmissionResult;

@@ -1,4 +1,5 @@
 import { STARTING_RATING, type MatchSide } from "./rating/engine";
+import type { SetScore } from "./set-score";
 
 export interface MatchLogSnapshot {
   players: SnapshotPlayer[];
@@ -47,11 +48,6 @@ export interface SnapshotCurrentRating {
   rating: number;
   competitiveMatchesPlayed: number;
   isRanked: boolean;
-}
-
-export interface SetScore {
-  a: number;
-  b: number;
 }
 
 export interface LeaderboardEntry {
@@ -161,6 +157,7 @@ export function createMatchLogProjection(
       .map((player) => player.id),
   );
   const ranks = activeRankMap(snapshot.currentRatings, activeIds);
+  const records = recordByPlayer(orderedMatches, participantsByMatch);
 
   function participantsFor(match: SnapshotMatch): FeedParticipant[] {
     return [...(participantsByMatch.get(match.id) ?? [])]
@@ -210,7 +207,6 @@ export function createMatchLogProjection(
   }
 
   function leaderboard(): LeaderboardEntry[] {
-    const records = recordByPlayer(orderedMatches, participantsByMatch);
     return snapshot.players
       .filter((player) => player.retiredAt === null)
       .map((player) => {
@@ -247,14 +243,7 @@ export function createMatchLogProjection(
         ),
       )
       .map(toFeedMatch);
-    const wins = played.filter((match) =>
-      match.participants.some(
-        (participant) =>
-          participant.kind === "player" &&
-          participant.playerId === playerId &&
-          participant.side === match.winnerSide,
-      ),
-    ).length;
+    const record = records.get(playerId);
     const rating = currentById.get(playerId);
 
     return {
@@ -263,8 +252,8 @@ export function createMatchLogProjection(
       retired: player.retiredAt !== null,
       rating: rating?.rating ?? STARTING_RATING,
       rank: ranks.get(playerId) ?? null,
-      wins,
-      losses: played.length - wins,
+      wins: record?.wins ?? 0,
+      losses: record?.losses ?? 0,
       ratingSeries: played
         .map((match) => {
           const participant = match.participants.find(

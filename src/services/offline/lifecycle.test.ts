@@ -3,6 +3,7 @@ import {
   createOfflineLifecycle,
   type OfflineLifecycleDependencies,
 } from "./lifecycle";
+import type { QueuedMatch } from "./queue-contract";
 
 function dependencies(
   overrides: Partial<OfflineLifecycleDependencies> = {},
@@ -128,6 +129,16 @@ describe("offline lifecycle", () => {
 
   it("refreshes the rebound Player snapshot and retries not-bound Matches", async () => {
     const match = queuedMatch({ syncCode: "not-bound" });
+    let owed = true;
+    const cleanupLatch = {
+      set: vi.fn(() => {
+        owed = true;
+      }),
+      pending: vi.fn(() => owed),
+      clear: vi.fn(() => {
+        owed = false;
+      }),
+    };
     const refreshSnapshot = vi.fn().mockResolvedValue(undefined);
     const submitMatch = vi.fn().mockResolvedValue({ ok: true });
     const removeQueuedMatch = vi.fn().mockResolvedValue(undefined);
@@ -138,6 +149,7 @@ describe("offline lifecycle", () => {
           player: { id: "player-1", name: "Alex" },
           revoked: false,
         }),
+        cleanupLatch,
         refreshSnapshot,
         listQueuedMatches: vi.fn().mockResolvedValue([match]),
         submitMatch,
@@ -147,6 +159,7 @@ describe("offline lifecycle", () => {
 
     await lifecycle.trigger();
 
+    expect(cleanupLatch.clear).toHaveBeenCalledOnce();
     expect(refreshSnapshot).toHaveBeenCalledWith({
       id: "player-1",
       name: "Alex",
@@ -203,6 +216,29 @@ describe("offline lifecycle", () => {
     );
 
     await lifecycle.trigger();
+    await lifecycle.trigger();
+
+    expect(submitMatch).not.toHaveBeenCalled();
+  });
+
+  it("never submits an incompatible durable queue record", async () => {
+    const submitMatch = vi.fn();
+    const lifecycle = createOfflineLifecycle(
+      dependencies({
+        listQueuedMatches: vi.fn().mockResolvedValue([
+          {
+            incompatible: true,
+            id: "legacy-match",
+            queuedAt: "2026-07-22T12:00:00.000Z",
+            ownerPlayerName: "Alex",
+            syncCode: "invalid",
+            syncError: "Incompatible queued data",
+          },
+        ]),
+        submitMatch,
+      }),
+    );
+
     await lifecycle.trigger();
 
     expect(submitMatch).not.toHaveBeenCalled();
@@ -297,10 +333,8 @@ describe("offline lifecycle", () => {
 });
 
 function queuedMatch(
-  overrides: Partial<
-    Awaited<ReturnType<OfflineLifecycleDependencies["listQueuedMatches"]>>[number]
-  > = {},
-) {
+  overrides: Partial<QueuedMatch> = {},
+): QueuedMatch {
   return {
     id: "01900000-0000-7000-8000-000000000001",
     playedAt: "2026-07-22T12:00:00.000Z",

@@ -16,7 +16,9 @@ import {
   QUEUE_CHANGED_EVENT,
   listQueuedMatches,
   removeQueuedMatch,
+  type IncompatibleQueuedMatch,
   type QueuedMatch,
+  type QueuedMatchRecord,
 } from "@/services/offline/queue";
 
 /**
@@ -25,7 +27,7 @@ import {
  * Queued variant of MatchCard: dashed gold border, no deltas yet.
  */
 export function QueuedMatches() {
-  const [queued, setQueued] = useState<QueuedMatch[]>([]);
+  const [queued, setQueued] = useState<QueuedMatchRecord[]>([]);
 
   const load = useCallback(() => {
     listQueuedMatches()
@@ -44,9 +46,53 @@ export function QueuedMatches() {
   return (
     <div className="space-y-3">
       {queued.map((match) => (
-        <QueuedMatchCard key={match.id} match={match} />
+        <div key={match.id}>
+          {"incompatible" in match ? (
+            <IncompatibleQueuedMatchCard match={match} />
+          ) : (
+            <QueuedMatchCard match={match} />
+          )}
+        </div>
       ))}
     </div>
+  );
+}
+
+/** A durable record whose old payload shape cannot safely be reconstructed. */
+export function IncompatibleQueuedMatchCard({
+  match,
+}: {
+  match: IncompatibleQueuedMatch;
+}) {
+  return (
+    <article className="flex flex-col gap-[11px] border border-dashed border-primary px-4 py-[15px]">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-xs font-semibold tracking-[1px] text-muted-foreground uppercase">
+          Saved on this device
+        </p>
+        <Badge variant="blocked">Can&apos;t sync</Badge>
+      </div>
+      <h2 className="font-display text-[24px] leading-none uppercase">
+        Incompatible queued match
+      </h2>
+      <p className="border-b border-destructive-border pb-2.5 text-[13px] leading-[1.35] font-medium tracking-[0.3px] text-destructive">
+        {match.syncError}
+      </p>
+      <ConfirmDialog
+        trigger={
+          <Button
+            variant="destructive"
+            className="w-fit font-sans text-xs tracking-[2px]"
+          >
+            Discard
+          </Button>
+        }
+        title="Discard this incompatible queued match?"
+        description={`It cannot be read safely by this app version. Discarding removes ${match.ownerPlayerName}'s local record for good.`}
+        confirmLabel="Discard"
+        onConfirm={() => removeQueuedMatch(match.id)}
+      />
+    </article>
   );
 }
 

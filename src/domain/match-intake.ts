@@ -6,16 +6,12 @@ import {
 } from "./match-participant";
 import { normalizePlayerName } from "./player-name";
 import type { MatchSide } from "./rating/engine";
-
-export interface IntakeSetScore {
-  a: number;
-  b: number;
-}
+import type { SetScore } from "./set-score";
 
 export interface MatchIntake {
   sides: Record<MatchSide, MatchParticipant[]>;
   winnerSide: MatchSide;
-  sets: IntakeSetScore[] | null;
+  sets: SetScore[] | null;
 }
 
 export interface MatchIntakeRoster {
@@ -36,6 +32,7 @@ export type MatchIntakeErrorCode =
   | "duplicate-guest"
   | "invalid-sets"
   | "drawn-set"
+  | "invalid-winner"
   | "winner-mismatch";
 
 export interface MatchIntakeError {
@@ -51,7 +48,7 @@ export type MatchIntakeValidation =
   | {
       ok: true;
       sides: Record<MatchSide, ValidatedMatchParticipant[]>;
-      sets: IntakeSetScore[] | null;
+      sets: SetScore[] | null;
     }
   | { ok: false; error: MatchIntakeError };
 
@@ -64,6 +61,9 @@ export function validateMatchIntake(
   intake: MatchIntake,
   roster: MatchIntakeRoster,
 ): MatchIntakeValidation {
+  if (intake.winnerSide !== "A" && intake.winnerSide !== "B") {
+    return failure("invalid-winner", "A Match must have one winning side.");
+  }
   const sides = intake.sides;
   if (
     !sides ||
@@ -192,7 +192,7 @@ function toMatchParticipant(
 }
 
 function validateSets(
-  sets: IntakeSetScore[] | null,
+  sets: SetScore[] | null,
   winnerSide: MatchSide,
 ): Extract<MatchIntakeValidation, { ok: false }> | null {
   if (sets === null) return null;

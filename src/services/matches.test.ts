@@ -410,6 +410,10 @@ describe.skipIf(!hasDatabase)("matches service", () => {
           B: [player(alex.id), player(uuidv7())],
         },
       },
+      {
+        ...singles(simon, alex),
+        winnerSide: "C" as unknown as "A",
+      },
     ];
     for (const input of badInputs) {
       await expect(logMatch(db, input)).rejects.toBeInstanceOf(

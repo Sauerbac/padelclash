@@ -115,6 +115,13 @@ describe("validateMatchIntake", () => {
       code: "drawn-set",
     },
     {
+      rule: "a declared winning side",
+      sides: { A: [player("a")], B: [player("b")] },
+      winnerSide: "C" as unknown as "A",
+      sets: null,
+      code: "invalid-winner",
+    },
+    {
       rule: "winner and sets consistency",
       sides: { A: [player("a")], B: [player("b")] },
       sets: [{ a: 4, b: 6 }],
@@ -124,7 +131,7 @@ describe("validateMatchIntake", () => {
     const result = validateMatchIntake(
       {
         sides: testCase.sides,
-        winnerSide: "A",
+        winnerSide: testCase.winnerSide ?? "A",
         sets: testCase.sets,
       },
       {
