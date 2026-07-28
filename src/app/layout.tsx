@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Barlow_Condensed, IBM_Plex_Mono } from "next/font/google";
-import { OfflineSync } from "@/components/offline-sync";
-import { SessionWatch } from "@/components/session-watch";
+import { OfflineLifecycle } from "@/components/offline-lifecycle";
 import { SwRegister } from "@/components/sw-register";
 import "./globals.css";
 
@@ -54,10 +53,7 @@ export default function RootLayout({
     >
       <body className="flex h-full flex-col overflow-hidden">
         <SwRegister />
-        {/* Order matters: SessionWatch may discover the binding is gone, and
-            a queue flush against a revoked credential is wasted work. */}
-        <SessionWatch />
-        <OfflineSync />
+        <OfflineLifecycle />
         {/* The app's only scroller. See globals.css: iOS won't let us hide the
             document scroll indicator, but it honours the CSS on this one. */}
         <div

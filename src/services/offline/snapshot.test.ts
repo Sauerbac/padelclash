@@ -57,6 +57,16 @@ describe("offline Match-entry snapshot", () => {
       const transaction = v1.transaction("queued-matches", "readwrite");
       transaction.objectStore("queued-matches").put({
         id: "01900000-0000-7000-8000-000000000000",
+        playedAt: "2026-07-22T12:00:00.000Z",
+        ownerPlayerId: "player-1",
+        ownerPlayerName: "Alex",
+        sides: {
+          A: [{ kind: "player", playerId: "player-1" }],
+          B: [{ kind: "player", playerId: "player-2" }],
+        },
+        names: { A: ["Alex"], B: ["Blair"] },
+        winnerSide: "A",
+        sets: null,
         queuedAt: "2026-07-22T12:00:00.000Z",
       });
       transaction.oncomplete = () => resolve();
@@ -73,8 +83,11 @@ describe("offline Match-entry snapshot", () => {
     await saveOfflineMatchSnapshot(snapshot);
 
     expect(await loadOfflineMatchSnapshot()).toEqual(snapshot);
-    expect((await listQueuedMatches()).map(({ id }) => id)).toEqual([
-      "01900000-0000-7000-8000-000000000000",
+    expect(await listQueuedMatches()).toEqual([
+      expect.objectContaining({
+        id: "01900000-0000-7000-8000-000000000000",
+        ownerPlayerId: "player-1",
+      }),
     ]);
 
     await clearOfflineMatchSnapshot();

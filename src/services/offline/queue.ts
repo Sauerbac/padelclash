@@ -1,36 +1,13 @@
-import type { LogMatchPayload } from "@/app/actions/matches";
 import {
   isPermanentRefusal,
-  type MatchSyncRefusal,
 } from "../../domain/sync-policy";
 import { QUEUED_MATCHES_STORE, withOfflineStore } from "./db";
-
-/**
- * Offline log queue (spec "PWA & offline"): a match logged without a
- * connection waits in IndexedDB until the network returns. The client-side
- * UUIDv7 id doubles as the idempotency key, so a retried sync can't
- * double-log. Browser-only — every caller is a client component.
- *
- * Each item carries `ownerPlayerId` (inherited from LogMatchPayload): the
- * Player who queued it. The server refuses to accept it under any other
- * identity (spec decision 52), so a device rebound to someone else gets an
- * `identity-mismatch` refusal rather than silent re-attribution.
- */
-export interface QueuedMatch extends LogMatchPayload {
-  /** Player names per side at queue time, so the pending card renders offline. */
-  names: Record<"A" | "B", string[]>;
-  /**
-   * Display name of `ownerPlayerId` at queue time. The card has to be able to
-   * say *whose* match is stuck when this installation is now bound to someone
-   * else — and at that point the roster query behind the name is gone.
-   */
-  ownerPlayerName: string;
-  queuedAt: string;
-  /** Last server-side rejection, if any — surfaced on the pending card. */
-  syncError?: string;
-  /** Its code, which decides whether retrying can ever help. */
-  syncCode?: MatchSyncRefusal;
-}
+import {
+  decodeQueuedMatch,
+  type QueuedMatch,
+  type QueuedMatchInput,
+} from "./queue-contract";
+export type { QueuedMatch, QueuedMatchInput } from "./queue-contract";
 
 /** Fired on window whenever the queue's contents change. */
 export const QUEUE_CHANGED_EVENT = "padelclash:queue-changed";
@@ -58,17 +35,21 @@ function notifyQueueChanged(): void {
 }
 
 /** Adds a match to the queue; an existing record with the same id is replaced. */
-export async function enqueueMatch(match: QueuedMatch): Promise<void> {
+export async function enqueueMatch(match: QueuedMatchInput): Promise<void> {
   await withStore("readwrite", (store) => store.put(match));
   notifyQueueChanged();
 }
 
 /** All queued matches, oldest first (UUIDv7 ids are time-ordered). */
 export async function listQueuedMatches(): Promise<QueuedMatch[]> {
-  const all = await withStore("readonly", (store) =>
-    store.getAll(),
-  ) as QueuedMatch[];
-  return all.sort((a, b) => (a.id < b.id ? -1 : 1));
+  const all = (await withStore("readonly", (store) => store.getAll())) as unknown[];
+  const queued: QueuedMatch[] = [];
+  for (const stored of all) {
+    const decoded = decodeQueuedMatch(stored);
+    if (!decoded) continue;
+    queued.push(decoded);
+  }
+  return queued.sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
 export async function removeQueuedMatch(id: string): Promise<void> {
