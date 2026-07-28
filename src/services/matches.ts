@@ -21,11 +21,10 @@ import {
 } from "../domain/rating/engine";
 import { canModifyMatch, type MatchActor } from "../domain/edit-rights";
 import {
-  normalizeGuestParticipant,
-  type MatchParticipant,
-  type NormalizedGuestParticipant,
-  type PlayerParticipant,
-} from "../domain/match-participant";
+  validateMatchIntake,
+  type ValidatedMatchParticipant,
+} from "../domain/match-intake";
+import type { MatchParticipant } from "../domain/match-participant";
 
 export class MatchValidationError extends Error {
   constructor(message: string) {
@@ -68,8 +67,6 @@ export async function logMatch(
   db: Db,
   input: LogMatchInput,
 ): Promise<LoggedMatch> {
-  validateSides(input.sides);
-  validateSets(input.sets ?? null, input.winnerSide);
   return db.transaction(async (tx) => {
     // Writers must run one at a time: under READ COMMITTED, two concurrent
     // logs would each replay a log missing the other's match, and the second
@@ -77,6 +74,7 @@ export async function logMatch(
     // advisory lock is transaction-scoped (released on commit/rollback) and
     // doesn't block readers.
     await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
+    const normalizedSides = await validateIntake(tx, input);
 
     const [match] = await tx
       .insert(matches)
@@ -104,7 +102,6 @@ export async function logMatch(
       };
     }
 
-    const normalizedSides = await validateParticipants(tx, input.sides);
     await tx
       .insert(matchParticipants)
       .values(participantInsertRows(match.id, normalizedSides));
@@ -146,14 +143,12 @@ export async function editMatch(
   actor: MatchActor,
   now: Date = new Date(),
 ): Promise<EditedMatch> {
-  validateSides(input.sides);
-  validateSets(input.sets ?? null, input.winnerSide);
   return db.transaction(async (tx) => {
     // Same writer serialization as logMatch (see there).
     await tx.execute(sql`select pg_advisory_xact_lock(${MATCH_LOG_LOCK_KEY})`);
 
     await requireModifiableMatch(tx, input.id, actor, now, "edit");
-    const normalizedSides = await validateParticipants(tx, input.sides);
+    const normalizedSides = await validateIntake(tx, input);
 
     const [match] = await tx
       .update(matches)
@@ -231,134 +226,35 @@ function deltasOf(tx: Db, matchId: string): Promise<RatingHistoryRow[]> {
     .where(eq(ratingHistory.matchId, matchId));
 }
 
-// Sides are 1v1 or 2v2, and a player appears on exactly one side, once
-// (spec "Match"). Checked before the transaction opens.
-function validateSides(sides: Record<MatchSide, MatchParticipant[]>): void {
-  if (sides.A.length !== sides.B.length) {
-    throw new MatchValidationError(
-      "Sides must have the same number of participants",
-    );
-  }
-  if (sides.A.length < 1 || sides.A.length > 2) {
-    throw new MatchValidationError(
-      "Sides must have 1 (singles) or 2 (doubles) participants",
-    );
-  }
-  const all = [...sides.A, ...sides.B];
-  const playerIds = all
-    .filter((participant): participant is PlayerParticipant => participant.kind === "player")
-    .map((participant) => participant.playerId);
-  if (new Set(playerIds).size !== playerIds.length) {
-    throw new MatchValidationError("A player can appear on only one side, once");
-  }
-  for (const side of ["A", "B"] as const) {
-    const guests = sides[side].filter((participant) => participant.kind === "guest");
-    const playersOnSide = sides[side].length - guests.length;
-    if (playersOnSide < 1 || guests.length > 1) {
-      throw new MatchValidationError(
-        "Every side must contain a Player and at most one Guest",
-      );
-    }
-  }
-  if (sides.A.length === 1 && all.some((participant) => participant.kind === "guest")) {
-    throw new MatchValidationError("Guests are doubles-only");
-  }
-}
-
-// A Set Score is games per set, e.g. 6-4 (spec "Match"). Bounds are sanity
-// caps, not tennis rules — unusual scorelines are the players' business.
-function validateSets(sets: SetScore[] | null, winnerSide: MatchSide): void {
-  if (sets === null) return;
-  const valid =
-    sets.length >= 1 &&
-    sets.length <= 5 &&
-    sets.every(
-      (s) =>
-        Number.isInteger(s.a) &&
-        Number.isInteger(s.b) &&
-        s.a >= 0 &&
-        s.b >= 0 &&
-        s.a <= 99 &&
-        s.b <= 99,
-    );
-  if (!valid) {
-    throw new MatchValidationError(
-      "Set scores must be 1-5 sets of games from 0 to 99",
-    );
-  }
-  const setWins = sets.reduce(
-    (wins, set) => {
-      if (set.a === set.b) {
-        throw new MatchValidationError("Every set must have a winner");
-      }
-      wins[set.a > set.b ? "A" : "B"]++;
-      return wins;
-    },
-    { A: 0, B: 0 },
-  );
-  if (setWins[winnerSide] <= setWins[winnerSide === "A" ? "B" : "A"]) {
-    throw new MatchValidationError(
-      "The declared Match winner must have won more sets",
-    );
-  }
-}
-
-type NormalizedParticipant = PlayerParticipant | NormalizedGuestParticipant;
-
-async function validateParticipants(
+async function validateIntake(
   tx: Db,
-  sides: Record<MatchSide, MatchParticipant[]>,
-): Promise<Record<MatchSide, NormalizedParticipant[]>> {
+  input: Pick<LogMatchInput, "sides" | "winnerSide" | "sets">,
+): Promise<Record<MatchSide, ValidatedMatchParticipant[]>> {
   const roster = await tx
     .select({
       id: players.id,
-      normalizedName: players.normalizedName,
+      name: players.name,
     })
     .from(players);
-  const rosterById = new Map(roster.map((player) => [player.id, player]));
-  const reservedNames = new Set(roster.map((player) => player.normalizedName));
-  const guestNames = new Set<string>();
-
-  const normalizeSide = (side: MatchSide): NormalizedParticipant[] =>
-    sides[side].map((participant) => {
-      if (participant.kind === "player") {
-        if (
-          typeof participant.playerId !== "string" ||
-          !rosterById.has(participant.playerId)
-        ) {
-          throw new MatchValidationError(
-            "Every Player participant must exist on the roster",
-          );
-        }
-        return { kind: "player", playerId: participant.playerId };
-      }
-      if (participant.kind !== "guest" || typeof participant.name !== "string") {
-        throw new MatchValidationError("Invalid match participant");
-      }
-      let guest: NormalizedGuestParticipant;
-      try {
-        guest = normalizeGuestParticipant(participant);
-      } catch (error) {
-        throw new MatchValidationError((error as Error).message);
-      }
-      if (reservedNames.has(guest.normalizedName)) {
-        throw new MatchValidationError(
-          "A Guest Name cannot match any roster Player Name",
-        );
-      }
-      if (guestNames.has(guest.normalizedName)) {
-        throw new MatchValidationError(
-          "Participant names must be unique within a Match",
-        );
-      }
-      guestNames.add(guest.normalizedName);
-      return guest;
-    });
-
-  return { A: normalizeSide("A"), B: normalizeSide("B") };
+  const validation = validateMatchIntake(
+    {
+      sides: input.sides,
+      winnerSide: input.winnerSide,
+      sets: input.sets ?? null,
+    },
+    {
+      // Includes Retired Players: a Match queued while active may sync later.
+      playerIds: roster.map(({ id }) => id),
+      reservedPlayerNames: roster.map(({ name }) => name),
+    },
+  );
+  if (!validation.ok) {
+    throw new MatchValidationError(validation.error.message);
+  }
+  return validation.sides;
 }
 
-function participantValues(participant: NormalizedParticipant): {
+function participantValues(participant: ValidatedMatchParticipant): {
   playerId: string | null;
   guestName: string | null;
   guestNormalizedName: string | null;
@@ -378,7 +274,7 @@ function participantValues(participant: NormalizedParticipant): {
 
 function participantInsertRows(
   matchId: string,
-  sides: Record<MatchSide, NormalizedParticipant[]>,
+  sides: Record<MatchSide, ValidatedMatchParticipant[]>,
 ) {
   return (["A", "B"] as const).flatMap((side) =>
     sides[side].map((participant, slot) => ({

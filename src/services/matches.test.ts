@@ -398,12 +398,38 @@ describe.skipIf(!hasDatabase)("matches service", () => {
           B: [player(alex.id), guest("Pat")],
         },
       },
+      singles(simon, alex, {
+        sides: { A: [player(uuidv7())], B: [player(alex.id)] },
+      }),
+      {
+        ...singles(simon, alex),
+        sides: {
+          A: [player(simon.id), guest("   ")],
+          B: [player(alex.id), player(uuidv7())],
+        },
+      },
     ];
     for (const input of badInputs) {
       await expect(logMatch(db, input)).rejects.toBeInstanceOf(
         MatchValidationError,
       );
     }
+  });
+
+  it("rejects unknown Players but accepts an existing Retired Player for late sync", async () => {
+    await expect(
+      logMatch(
+        db,
+        singles(simon, alex, {
+          sides: { A: [player(uuidv7())], B: [player(alex.id)] },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(MatchValidationError);
+
+    await retirePlayer(db, alex.id);
+    await expect(logMatch(db, singles(simon, alex))).resolves.toMatchObject({
+      alreadyLogged: false,
+    });
   });
 
   it("a delete racing a log is serialized — projections miss nothing", async () => {

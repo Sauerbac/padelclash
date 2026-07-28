@@ -26,7 +26,10 @@ import {
 import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
-import { validateMatchDraft } from "@/domain/match-draft";
+import {
+  toMatchParticipantSides,
+  validateMatchIntake,
+} from "@/domain/match-intake";
 import type { MatchParticipant } from "@/domain/match-participant";
 
 interface RosterEntry {
@@ -210,23 +213,28 @@ export function MatchForm({
     if (Number.isNaN(playedAtDate.getTime())) {
       return setError("Pick when the match was played.");
     }
-    const validation = validateMatchDraft({
-      sides: {
-        A: sideParticipants("A"),
-        B: sideParticipants("B"),
+    const validation = validateMatchIntake(
+      {
+        sides: {
+          A: sideParticipants("A"),
+          B: sideParticipants("B"),
+        },
+        winnerSide: winner,
+        sets: parsedSets,
       },
-      winnerSide: winner,
-      sets: parsedSets,
-      reservedPlayerNames,
-    });
-    if (!validation.ok) return setError(validation.error);
+      {
+        playerIds: roster.map(({ id }) => id),
+        reservedPlayerNames,
+      },
+    );
+    if (!validation.ok) return setError(validation.error.message);
     setError(null);
 
     startTransition(async () => {
       const payload = {
         id: editing ? editing.id : uuidv7(),
         playedAt: playedAtDate.toISOString(),
-        sides: validation.sides,
+        sides: toMatchParticipantSides(validation.sides),
         winnerSide: winner,
         sets: validation.sets,
       };
