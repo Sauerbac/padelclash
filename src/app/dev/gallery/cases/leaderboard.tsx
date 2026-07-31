@@ -60,17 +60,17 @@ function refreshPreview(phase: PullIndicatorPhase) {
 const PULL_CASES: Record<PullIndicatorPhase, ScreenCase> = {
   pulling: {
     title: "Pull to refresh",
-    note: "Rankings is moving with a downward drag. The centered label fades in subtly between two fixed arrows; releasing before the threshold settles without a request.",
+    note: "Rankings is moving with a downward drag. The indicator stays hidden at first, then the centered label fades in subtly between two fixed arrows.",
     render: () => refreshPreview("pulling"),
   },
   ready: {
     title: "Release to refresh",
-    note: "Rankings crossed the threshold. The copy changes without shifting the centered label or paired arrows; releasing now reloads the projection.",
+    note: "Rankings crossed the threshold. The copy cross-fades while both fixed arrows rotate over the same interval; releasing now reloads the projection.",
     render: () => refreshPreview("ready"),
   },
   refreshing: {
     title: "Refreshing",
-    note: "The paired arrows have cross-faded to one centered spinner-and-label group. Standings hold their loading offset until the new server-rendered projection arrives.",
+    note: "The paired arrows have cross-faded to one centered spinner-and-label group. Standings hold their loading offset until the new projection arrives, then ease back to normal.",
     render: () => refreshPreview("refreshing"),
   },
 };

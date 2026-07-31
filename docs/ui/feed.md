@@ -44,12 +44,13 @@ When the Feed's app scroller is already at the top, dragging downward reveals a
 `Pull to refresh` indicator. Crossing the threshold changes it to `Release to
 refresh`; releasing then refreshes the current route and shows `Refreshing`
 until the new server-rendered Feed arrives. A short pull settles without a
-request. The centered label fades subtly upward as the content follows the
-finger, with fixed arrow positions on both sides so changing the pull/release
-copy never shifts the indicator. Refreshing replaces them with one centered
-spinner-and-label group. A successful release settles into the loading offset
-before the content smoothly returns. The bottom tab bar remains fixed
-throughout.
+request. The indicator stays hidden through the beginning of the gesture, then
+the centered label fades subtly upward as the content follows the finger. Fixed
+arrow positions on both sides keep the indicator still; crossing the threshold
+rotates both arrows while the pull/release copy cross-fades over the same
+interval. Refreshing replaces them with one centered spinner-and-label group.
+A successful release settles into the loading offset before the content eases
+back to normal. The bottom tab bar remains fixed throughout.
 
 ## Device identity states
 

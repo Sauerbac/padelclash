@@ -16,7 +16,8 @@ import { cn } from "@/lib/utils";
 export type PullIndicatorPhase = Exclude<PullPhase, "idle"> | "refreshing";
 
 const RESTING_REFRESH_DISTANCE = 64;
-const PULL_REVEAL_DISTANCE = 28;
+const PULL_REVEAL_START_DISTANCE = 18;
+const PULL_REVEAL_FADE_DISTANCE = 24;
 
 export function PullToRefresh({
   children,
@@ -135,7 +136,11 @@ export function PullToRefresh({
   const revealProgress = previewPhase
     ? 1
     : visiblePhase === "pulling"
-      ? Math.min(distance / PULL_REVEAL_DISTANCE, 1)
+      ? Math.min(
+          Math.max(distance - PULL_REVEAL_START_DISTANCE, 0) /
+            PULL_REVEAL_FADE_DISTANCE,
+          1,
+        )
       : visiblePhase
         ? 1
         : 0;
@@ -154,7 +159,7 @@ export function PullToRefresh({
     <div ref={containerRef} className="relative flex flex-1 flex-col">
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-3 z-10 flex h-10 items-center justify-center font-mono text-[11px] font-semibold tracking-[2px] uppercase transition-[opacity,transform] duration-200 ease-out",
+          "pointer-events-none absolute inset-x-0 top-3 z-10 flex h-10 items-center justify-center font-mono text-[11px] font-semibold tracking-[2px] uppercase transition-[opacity,transform] duration-300 ease-out",
           visiblePhase === "ready" ? "text-accent" : "text-muted-foreground",
         )}
         style={{
@@ -163,7 +168,7 @@ export function PullToRefresh({
         }}
       >
         <span className="sr-only" aria-live="polite" aria-atomic="true">
-          {label}
+          {visiblePhase === "pulling" && revealProgress === 0 ? "" : label}
         </span>
         <div
           aria-hidden
@@ -174,7 +179,7 @@ export function PullToRefresh({
               key={column}
               className={cn(
                 column,
-                "row-start-1 size-4 transition-[opacity,transform] duration-200",
+                "row-start-1 size-4 transition-[opacity,rotate] duration-300 ease-out",
                 arrowsVisible ? "opacity-100" : "opacity-0",
                 visiblePhase === "ready" && "rotate-180",
               )}
@@ -182,7 +187,7 @@ export function PullToRefresh({
           ))}
           <span
             className={cn(
-              "col-start-2 row-start-1 text-center transition-[opacity,transform] duration-200",
+              "col-start-2 row-start-1 text-center transition-[opacity,transform] duration-300 ease-out",
               visiblePhase === "pulling"
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",
@@ -192,7 +197,7 @@ export function PullToRefresh({
           </span>
           <span
             className={cn(
-              "col-start-2 row-start-1 text-center transition-[opacity,transform] duration-200",
+              "col-start-2 row-start-1 text-center transition-[opacity,transform] duration-300 ease-out",
               visiblePhase === "ready"
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",
@@ -202,7 +207,7 @@ export function PullToRefresh({
           </span>
           <span
             className={cn(
-              "col-span-3 col-start-1 row-start-1 flex items-center justify-center gap-2 text-center transition-[opacity,transform] duration-200",
+              "col-span-3 col-start-1 row-start-1 flex items-center justify-center gap-2 text-center transition-[opacity,transform] duration-300 ease-out",
               visiblePhase === "refreshing"
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",
@@ -218,7 +223,7 @@ export function PullToRefresh({
         className={cn(
           "flex flex-1 flex-col will-change-transform",
           !dragging &&
-            "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            "transition-transform duration-400 ease-[cubic-bezier(0.22,1,0.36,1)]",
         )}
         style={{ transform: `translateY(${distance}px)` }}
       >
