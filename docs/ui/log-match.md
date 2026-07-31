@@ -56,9 +56,9 @@ mode switch. Choosing `Singles` changes the number of player slots:
 Turning doubles off clears the second picker on both sides. Turning it on does
 not invent additional player selections.
 
-Long participant names truncate in the closed picker without widening the
-screen. The gallery includes a doubles fixture with four deliberately long
-names at every supported review width.
+Long participant names truncate in both the closed picker and its option list
+without widening the screen. The gallery includes a doubles fixture with four
+deliberately long names at every supported review width.
 
 ### Participant pickers
 
@@ -66,6 +66,13 @@ Each slot is a full-width select control with the placeholder
 `Pick a participant`. The active roster is the Player option source. A Player
 already selected in another slot is removed from the other slot’s options,
 preventing a Player from appearing twice or on both sides.
+
+Opening a picker puts a Player search field first. The option list has a fixed
+maximum height beneath that field and scrolls locally once the roster exceeds
+it; the search remains visible while the results scroll. The native scrollbar
+is hidden. A shadow appears at each edge only when more results exist in that
+direction, disappearing at the full top or bottom. The popup is bounded to the
+phone viewport and long option labels use an ellipsis.
 
 In doubles, a slot may instead be changed to `Guest`, which reveals a
 40-character Guest Name input. At most one Guest is available on each Side and

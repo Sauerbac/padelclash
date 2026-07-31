@@ -13,6 +13,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Select,
   SelectContent,
@@ -336,6 +337,38 @@ export default function DesignSystemGallery() {
               </SelectContent>
             </Select>
           </div>
+        </Case>
+        <Case
+          id="searchable-select"
+          title="searchable participant picker"
+          note="Open it to inspect the pinned search field, locally scrolling roster, viewport collision handling and ellipsis on long names."
+          width={288}
+        >
+          <SearchableSelect
+            value=""
+            onValueChange={() => {}}
+            label="Participant"
+            placeholder="Pick a participant"
+            searchPlaceholder="Search players…"
+            emptyText="No players found."
+            options={[
+              "Alexandria Catherine Beaumont",
+              "Bartholomew Fitzgerald-Huang",
+              "Casey",
+              "Ingrid",
+              "Maximilian Alexander von Rosenberg",
+              "Christopher-Lee Montgomery-Smythe",
+              "Amara",
+              "Diego",
+              "Elena",
+              "Farid",
+              "Giulia",
+              "Hugo",
+            ].map((label, index) => ({
+              value: `player-${index}`,
+              label,
+            }))}
+          />
         </Case>
       </Section>
 

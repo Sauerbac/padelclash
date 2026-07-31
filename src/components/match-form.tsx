@@ -16,13 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RatingPayoff } from "@/components/rating-payoff";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
@@ -396,7 +390,10 @@ export function MatchForm({
       </div>
 
       {(["A", "B"] as const).map((side) => (
-        <fieldset key={side} className="border px-3.5 pt-3.5 pb-4">
+        <fieldset
+          key={side}
+          className="min-w-0 border px-3.5 pt-3.5 pb-4"
+        >
           <legend className="sr-only">Side {side}</legend>
           <div
             aria-hidden
@@ -407,7 +404,7 @@ export function MatchForm({
           >
             Side {side}
           </div>
-          <div className="mt-2.5 flex flex-col gap-2">
+          <div className="mt-2.5 flex min-w-0 flex-col gap-2">
             {slotsFor(side).map((slot, index) => {
               const selected = slots[slot];
               const selectedPlayerIds = new Set(
@@ -634,16 +631,10 @@ function ParticipantSelect({
 }) {
   const selectValue =
     value?.kind === "player" ? `player:${value.playerId}` : value ? "guest" : "";
-  const selectedName =
-    value?.kind === "player"
-      ? options.find((player) => player.id === value.playerId)?.name
-      : value
-        ? "Guest"
-        : null;
 
   return (
-    <div className="space-y-2">
-      <Select
+    <div className="min-w-0 space-y-2">
+      <SearchableSelect
         value={selectValue}
         onValueChange={(next) => {
           if (next === "guest") {
@@ -655,28 +646,30 @@ function ParticipantSelect({
           }
           onChange({ kind: "player", playerId: next.slice("player:".length) });
         }}
-      >
-        <SelectTrigger className="w-full" aria-label={label}>
-          <SelectValue placeholder="Pick a participant">
-            {selectedName}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((player) => (
-            <SelectItem key={player.id} value={`player:${player.id}`}>
-              {player.name}
-            </SelectItem>
-          ))}
-          {allowGuest && (
-            <SelectItem value="guest">
-              Guest
-              <span className="ml-2 font-mono text-[9px] tracking-[1px] text-accent">
-                MATCH ONLY
-              </span>
-            </SelectItem>
-          )}
-        </SelectContent>
-      </Select>
+        options={[
+          ...options.map((player) => ({
+            value: `player:${player.id}`,
+            label: player.name,
+          })),
+          ...(allowGuest
+            ? [
+                {
+                  value: "guest",
+                  label: "Guest",
+                  suffix: (
+                    <span className="shrink-0 font-mono text-[9px] tracking-[1px] text-accent">
+                      MATCH ONLY
+                    </span>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+        label={label}
+        placeholder="Pick a participant"
+        searchPlaceholder="Search players…"
+        emptyText="No players found."
+      />
       {value?.kind === "guest" && (
         <Input
           value={value.name}
