@@ -105,7 +105,7 @@ export function MatchForm({
   const enqueue = actions?.enqueue ?? enqueueMatch;
   const startingDraft = editing ?? initialDraft;
   const [doubles, setDoubles] = useState(
-    startingDraft ? startingDraft.sides.A.length === 2 : false,
+    startingDraft ? startingDraft.sides.A.length === 2 : true,
   );
   // The Logger pre-fills the first slot of side A (spec "Screens").
   const [slots, setSlots] = useState<Slots>(() =>
@@ -167,28 +167,50 @@ export function MatchForm({
           "Unknown";
   };
 
+  function sideRows(side: Side) {
+    return sideValues(side).map((participant, index) => ({
+      participant,
+      name: nameOf(participant) ?? `Player ${index + 1}`,
+    }));
+  }
+
   function sideLabel(side: Side): React.ReactNode {
-    const participants = sideValues(side).filter(
-      (participant): participant is MatchParticipant => participant !== null,
-    );
-    if (participants.length === 0) return `Side ${side}`;
-    return participants.map((participant, index) => (
-      <span
-        key={
-          participant.kind === "player"
-            ? participant.playerId
-            : `guest-${index}`
-        }
-      >
-        {index > 0 && <span className="text-muted-foreground"> & </span>}
-        {nameOf(participant)}
-        {participant.kind === "guest" && (
-          <span className="ml-1 font-mono text-[8px] tracking-[1px] text-accent">
-            GUEST
+    return (
+      <span className="flex w-full min-w-0 flex-col items-center gap-1">
+        {sideRows(side).map(({ participant, name }, index) => (
+          <span
+            key={
+              participant?.kind === "player"
+                ? participant.playerId
+                : participant
+                  ? `guest-${index}`
+                  : `empty-${index}`
+            }
+            title={participant ? name : undefined}
+            className={cn(
+              "flex w-full min-w-0 items-center justify-center",
+              !participant && "text-muted-foreground",
+            )}
+          >
+            <span className="min-w-0 truncate">{name}</span>
+            {participant?.kind === "guest" && (
+              <span className="ml-1 shrink-0 font-mono text-[8px] tracking-[1px] text-accent">
+                GUEST
+              </span>
+            )}
           </span>
-        )}
+        ))}
       </span>
-    ));
+    );
+  }
+
+  function winnerLabel(side: Side): string {
+    const names = sideRows(side)
+      .filter(({ participant }) => participant !== null)
+      .map(({ name }) => name);
+    return names.length === slotsFor(side).length
+      ? `${names.join(" and ")} wins`
+      : `Side ${side} wins`;
   }
 
   function submit() {
@@ -283,6 +305,7 @@ export function MatchForm({
   function reset() {
     setPayoff(null);
     setQueued(false);
+    setDoubles(true);
     setSlots({
       a1: loggerId ? { kind: "player", playerId: loggerId } : null,
       a2: null,
@@ -343,7 +366,7 @@ export function MatchForm({
     <div className="space-y-4">
       {/* Singles/doubles segmented toggle: wrapper carries the border. */}
       <div className="flex border" role="group" aria-label="Match mode">
-        {([false, true] as const).map((mode) => (
+        {([true, false] as const).map((mode) => (
           <Button
             key={String(mode)}
             type="button"
@@ -430,7 +453,7 @@ export function MatchForm({
       <div>
         <div className="section-label mb-2.5">Who took the W?</div>
         <div
-          className="flex items-stretch gap-2.5"
+          className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2.5"
           role="group"
           aria-label="Winner"
         >
@@ -448,9 +471,10 @@ export function MatchForm({
                 type="button"
                 variant={winner === side ? "default" : "outline"}
                 aria-pressed={winner === side}
+                aria-label={winnerLabel(side)}
                 onClick={() => setWinner(side)}
                 className={cn(
-                  "h-auto min-w-0 flex-1 px-1.5 py-4 font-display text-xl leading-[1.1] font-normal tracking-normal whitespace-normal [overflow-wrap:anywhere]",
+                  "h-auto min-w-0 w-full overflow-hidden px-2 py-4 font-display text-lg leading-[1.1] font-normal tracking-normal",
                   winner !== side && "text-muted-foreground hover:text-foreground",
                 )}
               >

@@ -1,8 +1,8 @@
 # Log Match
 
 **States: [`/dev/gallery/log`](../../src/app/dev/gallery/[section]/page.tsx)** —
-bound, unbound, refused, queued and successful-payoff states use the real
-prop-driven view and form.
+bound, long-name doubles, unbound, refused, queued and successful-payoff states
+use the real prop-driven view and form.
 
 ## Identity
 
@@ -47,14 +47,18 @@ There is no alternate Logger input in this screen.
 
 ### Singles / doubles switch
 
-The form starts in singles mode. A `Doubles` switch changes the number of
-player slots:
+The form starts in doubles mode, and `Doubles` is the left-hand option in the
+mode switch. Choosing `Singles` changes the number of player slots:
 
 - Singles: one picker under Side A and one picker under Side B.
 - Doubles: two pickers under each side.
 
 Turning doubles off clears the second picker on both sides. Turning it on does
 not invent additional player selections.
+
+Long participant names truncate in the closed picker without widening the
+screen. The gallery includes a doubles fixture with four deliberately long
+names at every supported review width.
 
 ### Participant pickers
 
@@ -79,9 +83,12 @@ historical match remains editable.
 
 ### Winner selection
 
-Show a `Winner` label and two side-by-side actions, one for Side A and one for
-Side B. The button label uses the selected player names joined by `&`; before a
-side is filled it falls back to `Side A` or `Side B`.
+Show a `Winner` label and two side-by-side team actions around a centered `VS`.
+Each participant occupies one single-line row inside their Side's action, so a
+doubles team has exactly two name rows. A name that exceeds the available
+half-width truncates with an ellipsis instead of wrapping or breaking. Empty
+slots retain their row with a `Player 1` or `Player 2` placeholder. A Guest's
+marker remains visible even when the Guest Name truncates.
 
 Exactly one side must be selected. The selected side uses the selected-button
 state; the other side remains unselected. There is no draw option.

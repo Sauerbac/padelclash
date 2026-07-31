@@ -8,6 +8,7 @@ import type { ScreenCase } from "../screen-cases";
 import {
   CASEY,
   inert,
+  LONG,
   PAYOFF,
   RESERVED_NAMES,
   ROSTER,
@@ -23,10 +24,43 @@ const VALID_DRAFT: MatchFormDraft = {
   sets: null,
 };
 
+const LONG_NAME_LOGGER = {
+  ...YOU,
+  name: "Alexandria Catherine Beaumont",
+};
+
+const LONG_NAME_ROSTER = [
+  LONG_NAME_LOGGER,
+  LONG,
+  {
+    id: "66666666-6666-7666-8666-666666666666",
+    name: "Maximilian Alexander von Rosenberg",
+  },
+  {
+    id: "77777777-7777-7777-8777-777777777777",
+    name: "Christopher-Lee Montgomery-Smythe",
+  },
+];
+
+const LONG_NAME_DRAFT: MatchFormDraft = {
+  sides: {
+    A: [
+      { kind: "player", playerId: LONG_NAME_LOGGER.id },
+      { kind: "player", playerId: LONG_NAME_ROSTER[2].id },
+    ],
+    B: [
+      { kind: "player", playerId: LONG.id },
+      { kind: "player", playerId: LONG_NAME_ROSTER[3].id },
+    ],
+  },
+  winnerSide: "A",
+  sets: null,
+};
+
 export const LOG_CASES: Record<string, ScreenCase> = {
   bound: {
     title: "Joined Player",
-    note: "The Logger is preselected; doubles, Guests, set scores and Now are reachable in the real form.",
+    note: "Doubles starts selected on the left; the Logger is preselected and Guests, set scores and Now remain reachable.",
     render: () => (
       <TabShell pathname="/log">
         {inert(
@@ -34,6 +68,22 @@ export const LOG_CASES: Record<string, ScreenCase> = {
             roster={ROSTER}
             reservedPlayerNames={RESERVED_NAMES}
             logger={YOU}
+          />,
+        )}
+      </TabShell>
+    ),
+  },
+  longNames: {
+    title: "Long doubles team names",
+    note: "All four participants deliberately have long names so Side pickers and winner controls can be checked at every gallery width.",
+    render: () => (
+      <TabShell pathname="/log">
+        {inert(
+          <LogMatchView
+            roster={LONG_NAME_ROSTER}
+            reservedPlayerNames={LONG_NAME_ROSTER.map((player) => player.name)}
+            logger={LONG_NAME_LOGGER}
+            initialDraft={LONG_NAME_DRAFT}
           />,
         )}
       </TabShell>

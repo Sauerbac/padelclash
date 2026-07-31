@@ -18,8 +18,8 @@ import type { FeedMatch } from "@/services/matches";
  * three sets is taller than a scoreless singles, and short cards are not
  * padded to match.
  *
- * Server-rendered; formats in the server's timezone, which is fine for one
- * circle in one place.
+ * Server-rendered; Match timestamps are formatted in the circle's timezone,
+ * independently of the server's deployment timezone.
  */
 export function MatchCard({
   match,

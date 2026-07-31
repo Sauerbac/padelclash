@@ -1,4 +1,5 @@
 import { PlayerLink } from "@/components/player-link";
+import { formatPlayedAt } from "@/lib/match-time";
 
 /**
  * The shared innards of a feed match card, so the synced card (`MatchCard`)
@@ -9,24 +10,11 @@ import { PlayerLink } from "@/components/player-link";
  * queue can import them as freely as the server-rendered feed.
  */
 
-/**
- * Day, abbreviated month, 24h time — "22 Jul, 19:30". No fixed zone: the
- * synced feed renders on the server and formats in the server's timezone
- * (fine for one circle in one place), while queued cards only ever render on
- * the device that logged them, where device-local is the right zone.
- */
-const playedAtFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 /** The mono timestamp opening every card. */
 export function PlayedAt({ at }: { at: Date }) {
   return (
     <span className="font-mono text-[11px] font-medium tracking-[1px] text-muted-foreground uppercase">
-      {playedAtFormat.format(at)}
+      {formatPlayedAt(at)}
     </span>
   );
 }
