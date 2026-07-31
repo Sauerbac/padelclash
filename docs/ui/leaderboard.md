@@ -1,7 +1,8 @@
 # Leaderboard
 
 **States: [`/dev/gallery/leaderboard`](../../src/app/dev/gallery/[section]/page.tsx)** —
-empty, early-table, exactly-three and mixed podium/table standings.
+pulling, release-ready and refreshing gestures, plus empty, early-table,
+exactly-three and mixed podium/table standings.
 
 ## Identity
 
@@ -25,6 +26,14 @@ not provide controls to adjust them directly.
 4. A note explaining the ranked threshold when at least one player is
    unranked.
 5. The shared bottom tab bar.
+
+## Pull to refresh
+
+When the Rankings app scroller is already at the top, dragging downward reveals
+a `Pull to refresh` indicator. Crossing the threshold changes it to `Release to
+refresh`; releasing then refreshes the current route and shows `Refreshing`
+until the new server-rendered standings arrive. A short pull settles without a
+request. The bottom tab bar remains fixed throughout.
 
 The table is not wrapped in a per-row card. It is a compact, horizontally
 scrollable table container, so the redesign must keep all four data fields
@@ -95,7 +104,7 @@ bottom tab bar remains available.
 ## Navigation and non-functionality
 
 - Tapping a player name opens Player Detail.
-- There are no sorting controls, filters, search, date selectors, or manual
-  refresh controls.
+- There are no sorting controls, filters, search, date selectors, or refresh
+  buttons. Pulling down from the top refreshes the standings.
 - The leaderboard requires a server read in v1; it is not populated from the
   offline match queue.

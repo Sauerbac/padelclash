@@ -1,6 +1,7 @@
 import { FeedView } from "@/components/feed-view";
 import { InvitationEntry } from "@/components/invitation-entry";
 import { NotJoined } from "@/components/not-joined";
+import type { PullIndicatorPhase } from "@/components/pull-to-refresh";
 import {
   IncompatibleQueuedMatchCard,
   QueuedMatchCard,
@@ -54,7 +55,42 @@ function queuedFixtures() {
 /** Nothing queued — what the real component renders on an empty queue. */
 const noQueue = <></>;
 
+function refreshPreview(phase: PullIndicatorPhase) {
+  return (
+    <TabShell pathname="/">
+      <FeedView
+        you={YOU}
+        isAdmin={false}
+        feed={FEED}
+        now={NOW}
+        queued={noQueue}
+        pullToRefreshPhase={phase}
+      />
+    </TabShell>
+  );
+}
+
+const PULL_CASES: Record<PullIndicatorPhase, FeedCase> = {
+  pulling: {
+    title: "Pull to refresh",
+    note: "The Feed is moving with a downward drag, but the refresh threshold has not been crossed yet. Releasing now settles without a request.",
+    render: () => refreshPreview("pulling"),
+  },
+  ready: {
+    title: "Release to refresh",
+    note: "The Feed crossed the threshold. Releasing now reloads its server data while the fixed tab bar stays put.",
+    render: () => refreshPreview("ready"),
+  },
+  refreshing: {
+    title: "Refreshing",
+    note: "The route refresh is in progress. The content stays offset until the new server-rendered Feed arrives.",
+    render: () => refreshPreview("refreshing"),
+  },
+};
+
 export const FEED_CASES: Record<string, FeedCase> = {
+  ...PULL_CASES,
+
   bound: {
     title: "Bound device, matches in the log",
     note: "The everyday screen. Only the top card is editable: its logger is you and it is two hours old, inside the 24-hour grace window. The 96-hour-old card you also logged has aged out, which is the boundary worth eyeballing.",

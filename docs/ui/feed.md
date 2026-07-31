@@ -38,6 +38,14 @@ The content is a single vertical column. Synced matches are individual match
 cards separated vertically. There is no filter, search, pagination control, or
 date grouping control.
 
+## Pull to refresh
+
+When the Feed's app scroller is already at the top, dragging downward reveals a
+`Pull to refresh` indicator. Crossing the threshold changes it to `Release to
+refresh`; releasing then refreshes the current route and shows `Refreshing`
+until the new server-rendered Feed arrives. A short pull settles without a
+request. The bottom tab bar remains fixed throughout.
+
 ## Device identity states
 
 ### Bound device

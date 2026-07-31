@@ -1,4 +1,5 @@
 import { LeaderboardView } from "@/components/leaderboard-view";
+import type { PullIndicatorPhase } from "@/components/pull-to-refresh";
 import { TabShell } from "@/components/tab-shell";
 import type { LeaderboardEntry } from "@/services/matches";
 import type { ScreenCase } from "../screen-cases";
@@ -43,7 +44,40 @@ const FULL: LeaderboardEntry[] = [
   },
 ];
 
+function refreshPreview(phase: PullIndicatorPhase) {
+  return (
+    <TabShell pathname="/leaderboard">
+      <LeaderboardView
+        entries={FULL}
+        youId={YOU.id}
+        isAdmin={false}
+        pullToRefreshPhase={phase}
+      />
+    </TabShell>
+  );
+}
+
+const PULL_CASES: Record<PullIndicatorPhase, ScreenCase> = {
+  pulling: {
+    title: "Pull to refresh",
+    note: "Rankings is moving with a downward drag, but the refresh threshold has not been crossed yet. Releasing now settles without a request.",
+    render: () => refreshPreview("pulling"),
+  },
+  ready: {
+    title: "Release to refresh",
+    note: "Rankings crossed the threshold. Releasing now reloads the projection while the fixed tab bar stays put.",
+    render: () => refreshPreview("ready"),
+  },
+  refreshing: {
+    title: "Refreshing",
+    note: "The route refresh is in progress. The standings stay offset until the new server-rendered projection arrives.",
+    render: () => refreshPreview("refreshing"),
+  },
+};
+
 export const LEADERBOARD_CASES: Record<string, ScreenCase> = {
+  ...PULL_CASES,
+
   mixed: {
     title: "Podium plus ranked and provisional rows",
     note: "Top three move onto the stand; the table starts after them and explains the threshold.",
