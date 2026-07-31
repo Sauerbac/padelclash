@@ -1,5 +1,5 @@
 export const PULL_THRESHOLD = 72;
-export const MAX_PULL_DISTANCE = 104;
+export const MAX_PULL_DISTANCE = 128;
 
 export type PullPhase = "idle" | "pulling" | "ready";
 
@@ -41,7 +41,7 @@ export function movePull(state: PullState, current: PullPoint): PullState {
   // Resistance keeps the indicator attached to the finger without letting the
   // whole screen travel indefinitely. The threshold remains based on the
   // physical gesture, so users do not need an exaggerated swipe.
-  const distance = Math.min(MAX_PULL_DISTANCE, rawDistance * 0.55);
+  const distance = Math.min(MAX_PULL_DISTANCE, rawDistance * 0.65);
   return {
     phase: rawDistance >= PULL_THRESHOLD ? "ready" : "pulling",
     start: state.start,

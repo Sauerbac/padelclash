@@ -73,17 +73,17 @@ function refreshPreview(phase: PullIndicatorPhase) {
 const PULL_CASES: Record<PullIndicatorPhase, FeedCase> = {
   pulling: {
     title: "Pull to refresh",
-    note: "The Feed is moving with a downward drag, but the refresh threshold has not been crossed yet. Releasing now settles without a request.",
+    note: "The Feed is moving with a downward drag. The centered label fades in subtly between two fixed arrows; releasing before the threshold settles without a request.",
     render: () => refreshPreview("pulling"),
   },
   ready: {
     title: "Release to refresh",
-    note: "The Feed crossed the threshold. Releasing now reloads its server data while the fixed tab bar stays put.",
+    note: "The Feed crossed the threshold. The copy changes without shifting the centered label or paired arrows; releasing now reloads its server data.",
     render: () => refreshPreview("ready"),
   },
   refreshing: {
     title: "Refreshing",
-    note: "The route refresh is in progress. The content stays offset until the new server-rendered Feed arrives.",
+    note: "The paired arrows have cross-faded to one centered spinner-and-label group. Content holds its loading offset until the new server-rendered Feed arrives.",
     render: () => refreshPreview("refreshing"),
   },
 };

@@ -15,7 +15,8 @@ import { cn } from "@/lib/utils";
 
 export type PullIndicatorPhase = Exclude<PullPhase, "idle"> | "refreshing";
 
-const PREVIEW_DISTANCE = 48;
+const RESTING_REFRESH_DISTANCE = 64;
+const PULL_REVEAL_DISTANCE = 28;
 
 export function PullToRefresh({
   children,
@@ -29,12 +30,28 @@ export function PullToRefresh({
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<PullState>(IDLE_PULL_STATE);
   const pendingRef = useRef(false);
+  const sawPendingRef = useRef(false);
   const [pull, setPull] = useState<PullState>(IDLE_PULL_STATE);
+  const [refreshCommitted, setRefreshCommitted] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const isRefreshing = refreshCommitted || isPending;
 
   useEffect(() => {
-    pendingRef.current = isPending;
-  }, [isPending]);
+    pendingRef.current = isRefreshing;
+
+    if (isPending) {
+      sawPendingRef.current = true;
+      return;
+    }
+
+    if (!refreshCommitted || !sawPendingRef.current) return;
+
+    sawPendingRef.current = false;
+    pendingRef.current = false;
+    stateRef.current = IDLE_PULL_STATE;
+    setPull(IDLE_PULL_STATE);
+    setRefreshCommitted(false);
+  }, [isPending, isRefreshing, refreshCommitted]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -73,10 +90,20 @@ export function PullToRefresh({
 
     const onTouchEnd = () => {
       const result = finishPull(stateRef.current);
-      update(result.state);
       if (result.shouldRefresh && !pendingRef.current) {
+        const refreshingState: PullState = {
+          phase: "ready",
+          start: null,
+          distance: RESTING_REFRESH_DISTANCE,
+        };
+        pendingRef.current = true;
+        update(refreshingState);
+        setRefreshCommitted(true);
         startTransition(() => router.refresh());
+        return;
       }
+
+      update(result.state);
     };
 
     container.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -94,51 +121,104 @@ export function PullToRefresh({
 
   const visiblePhase: PullIndicatorPhase | null =
     previewPhase ??
-    (isPending ? "refreshing" : pull.phase === "idle" ? null : pull.phase);
+    (isRefreshing
+      ? "refreshing"
+      : pull.phase === "idle"
+        ? null
+        : pull.phase);
   const distance = previewPhase
-    ? PREVIEW_DISTANCE
-    : isPending
-      ? PREVIEW_DISTANCE
+    ? RESTING_REFRESH_DISTANCE
+    : isRefreshing
+      ? RESTING_REFRESH_DISTANCE
       : pull.distance;
-  const dragging = pull.phase !== "idle" && !previewPhase;
+  const dragging = pull.start !== null && !previewPhase;
+  const revealProgress = previewPhase
+    ? 1
+    : visiblePhase === "pulling"
+      ? Math.min(distance / PULL_REVEAL_DISTANCE, 1)
+      : visiblePhase
+        ? 1
+        : 0;
+  const label =
+    visiblePhase === "ready"
+      ? "Release to refresh"
+      : visiblePhase === "refreshing"
+        ? "Refreshing"
+        : visiblePhase === "pulling"
+          ? "Pull to refresh"
+          : "";
+  const arrowsVisible =
+    visiblePhase === "pulling" || visiblePhase === "ready";
 
   return (
     <div ref={containerRef} className="relative flex flex-1 flex-col">
       <div
-        aria-live="polite"
-        aria-atomic="true"
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-2 z-10 flex h-9 items-center justify-center gap-2 font-mono text-[11px] font-semibold tracking-[2px] uppercase transition-opacity",
-          visiblePhase ? "opacity-100" : "opacity-0",
+          "pointer-events-none absolute inset-x-0 top-3 z-10 flex h-10 items-center justify-center font-mono text-[11px] font-semibold tracking-[2px] uppercase transition-[opacity,transform] duration-200 ease-out",
           visiblePhase === "ready" ? "text-accent" : "text-muted-foreground",
         )}
+        style={{
+          opacity: revealProgress,
+          transform: `translateY(${(1 - revealProgress) * 6}px)`,
+        }}
       >
-        {visiblePhase === "refreshing" ? (
-          <LoaderCircle aria-hidden className="size-4 animate-spin" />
-        ) : (
-          <ArrowDown
-            aria-hidden
-            className={cn(
-              "size-4 transition-transform",
-              visiblePhase === "ready" && "rotate-180",
-            )}
-          />
-        )}
-        <span>
-          {visiblePhase === null
-            ? ""
-            : visiblePhase === "ready"
-              ? "Release to refresh"
-              : visiblePhase === "refreshing"
-                ? "Refreshing"
-                : "Pull to refresh"}
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {label}
         </span>
+        <div
+          aria-hidden
+          className="grid w-[min(17rem,calc(100%-2rem))] grid-cols-[1rem_1fr_1rem] items-center gap-2"
+        >
+          {(["col-start-1", "col-start-3"] as const).map((column) => (
+            <ArrowDown
+              key={column}
+              className={cn(
+                column,
+                "row-start-1 size-4 transition-[opacity,transform] duration-200",
+                arrowsVisible ? "opacity-100" : "opacity-0",
+                visiblePhase === "ready" && "rotate-180",
+              )}
+            />
+          ))}
+          <span
+            className={cn(
+              "col-start-2 row-start-1 text-center transition-[opacity,transform] duration-200",
+              visiblePhase === "pulling"
+                ? "translate-y-0 opacity-100"
+                : "translate-y-1 opacity-0",
+            )}
+          >
+            Pull to refresh
+          </span>
+          <span
+            className={cn(
+              "col-start-2 row-start-1 text-center transition-[opacity,transform] duration-200",
+              visiblePhase === "ready"
+                ? "translate-y-0 opacity-100"
+                : "translate-y-1 opacity-0",
+            )}
+          >
+            Release to refresh
+          </span>
+          <span
+            className={cn(
+              "col-span-3 col-start-1 row-start-1 flex items-center justify-center gap-2 text-center transition-[opacity,transform] duration-200",
+              visiblePhase === "refreshing"
+                ? "translate-y-0 opacity-100"
+                : "translate-y-1 opacity-0",
+            )}
+          >
+            <LoaderCircle className="size-4 animate-spin" />
+            Refreshing
+          </span>
+        </div>
       </div>
 
       <div
         className={cn(
           "flex flex-1 flex-col will-change-transform",
-          !dragging && "transition-transform duration-200 ease-out",
+          !dragging &&
+            "transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
         )}
         style={{ transform: `translateY(${distance}px)` }}
       >
