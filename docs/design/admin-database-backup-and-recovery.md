@@ -182,3 +182,9 @@ also returns and must be revoked again if relevant.
 No new domain-glossary term or ADR is created. Backup and restore are general
 infrastructure concepts, and the durable topology trade-off is already captured
 by ADR 0002.
+
+PostgreSQL URL parsing remains duplicated at two deliberate runtime boundaries:
+the TypeScript service bundled by Next and the standalone `.mjs` recovery
+command. Sharing either implementation would couple the operator command to the
+application bundle or make Next trace outside its service boundary. Matching
+libpq fixture tests in both suites enforce behavioral parity instead.

@@ -295,6 +295,10 @@ that require the real domain, VPS, scheduled PC job or physical installed PWA.
 - [ ] PostgreSQL has its named volume and no public exposure.
 - [ ] An unbound browser cannot read private circle data.
 - [ ] Player onboarding, Admin login and Match logging work in a normal browser.
+- [ ] Desktop Chromium downloads an actual Admin backup with the strict
+  `padelclash-YYYYMMDDTHHMMSSZ.dump` filename. Repeat with a representative
+  production-size archive and watch browser memory because the current
+  fetch/Blob path buffers the archive before triggering the object-URL click.
 - [ ] A failed/repeated offline sync cannot create a duplicate Match.
 - [ ] Revoking a Device Binding clears private caches on its next online contact.
 - [ ] The latest scheduled dump exists off the VPS and restores successfully.
@@ -305,6 +309,11 @@ that require the real domain, VPS, scheduled PC job or physical installed PWA.
 ### iOS installed PWA
 
 - Install from Safari using Share → Add to Home Screen.
+- [ ] From both Safari and the installed PWA, download an actual Admin backup
+  and confirm that the asynchronous Blob/object-URL click opens or saves the
+  complete archive with the strict `padelclash-YYYYMMDDTHHMMSSZ.dump` filename.
+  This remains a physical-device check; desktop/headless Chromium is not a
+  substitute.
 - Confirm the binding survives opening the installed app.
 - Verify the tab bar, dialogs, keyboard and safe-area spacing.
 - After one successful online launch, reopen offline and queue a Match; reconnect

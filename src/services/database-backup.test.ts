@@ -7,10 +7,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BackupBusyError,
   BackupGenerationError,
+  BackupProcessUnconfirmedTerminationError,
   createDatabaseBackupService,
   databaseUrlToLibpqEnv,
   isPostgres17Version,
   runDatabaseBackupProcess,
+  verifyPostgres17Tools,
   type ProcessRequest,
 } from "./database-backup";
 
@@ -35,6 +37,28 @@ describe("PostgreSQL client version", () => {
     expect(isPostgres17Version("pg_dump (PostgreSQL) 17.5")).toBe(true);
     expect(isPostgres17Version("pg_dump (PostgreSQL) 16.9")).toBe(false);
     expect(isPostgres17Version("not PostgreSQL")).toBe(false);
+  });
+
+  it("bounds a version probe without claiming the child has closed", async () => {
+    vi.useFakeTimers();
+    try {
+      const child = new EventEmitter() as ChildProcess;
+      Object.defineProperty(child, "stderr", { value: null });
+      Object.defineProperty(child, "stdout", { value: null });
+      child.kill = vi.fn(() => true);
+      const verification = verifyPostgres17Tools(100, () => child);
+      const rejection = expect(verification).rejects.toBeInstanceOf(
+        BackupProcessUnconfirmedTerminationError,
+      );
+      child.emit("spawn");
+
+      await vi.advanceTimersByTimeAsync(1_100);
+
+      await rejection;
+      expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -67,6 +91,47 @@ describe("database backup process deadline", () => {
       expect(settled).toBe(false);
       child.emit("close", null, "SIGKILL");
       await expect(processPromise).rejects.toThrow("timed out");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bounds the caller but exposes ownership until close is observed", async () => {
+    vi.useFakeTimers();
+    try {
+      const child = new EventEmitter() as ChildProcess;
+      Object.defineProperty(child, "stderr", { value: null });
+      child.kill = vi.fn(() => true);
+      const processPromise = runDatabaseBackupProcess(
+        {
+          command: "pg_dump",
+          args: ["--version"],
+          env: { ...process.env },
+          timeoutMs: 100,
+        },
+        () => child,
+      );
+      let processError: unknown;
+      const rejection = processPromise.catch((error) => {
+        processError = error;
+      });
+      child.emit("spawn");
+
+      await vi.advanceTimersByTimeAsync(1_100);
+
+      expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+      await rejection;
+      expect(processError).toBeInstanceOf(
+        BackupProcessUnconfirmedTerminationError,
+      );
+      let ownershipEnded = false;
+      const closed = (
+        processError as BackupProcessUnconfirmedTerminationError
+      ).closed.then(() => (ownershipEnded = true));
+      expect(ownershipEnded).toBe(false);
+      child.emit("close", null, "SIGKILL");
+      await closed;
+      expect(ownershipEnded).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -132,13 +197,13 @@ describe("database backup service", () => {
     expect(service.isBusy()).toBe(false);
   });
 
-  it("removes partial and stale request directories after subprocess failure", async () => {
+  it("removes partial and recent orphan request directories after subprocess failure", async () => {
     const root = join(tmpdir(), `padelclash-backup-test-${crypto.randomUUID()}`);
     const stale = join(root, "request-stale");
     await mkdir(stale, { recursive: true, mode: 0o700 });
     await writeFile(join(stale, "secret.dump"), "old");
-    const old = new Date("2026-08-02T00:00:00Z");
-    await utimes(stale, old, old);
+    const recent = new Date("2026-08-04T12:34:55Z");
+    await utimes(stale, recent, recent);
     const service = createDatabaseBackupService({
       databaseUrl: () => DATABASE_URL,
       now: () => new Date("2026-08-04T12:34:56Z"),
@@ -155,6 +220,72 @@ describe("database backup service", () => {
     expect(await readdir(root)).toEqual([]);
     if (process.platform !== "win32") {
       expect((await stat(root)).mode & 0o777).toBe(0o700);
+    }
+  });
+
+  it("does not purge an artifact still being delivered by this process", async () => {
+    const root = join(tmpdir(), `padelclash-backup-test-${crypto.randomUUID()}`);
+    const service = createDatabaseBackupService({
+      databaseUrl: () => DATABASE_URL,
+      run: async ({ command, args }) => {
+        if (command === "pg_dump") await writeFile(args.at(-1)!, "archive");
+      },
+      tempRoot: root,
+      verifyTools: async () => {},
+    });
+
+    const first = await service.generate();
+    const second = await service.generate();
+
+    expect(await readFile(first.path, "utf8")).toBe("archive");
+    await first.dispose();
+    await second.dispose();
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it("retains the lease and partial artifact until a timed-out child closes", async () => {
+    vi.useFakeTimers();
+    const root = join(tmpdir(), `padelclash-backup-test-${crypto.randomUUID()}`);
+    try {
+      let markProcessStarted!: () => void;
+      const processStarted = new Promise<void>((resolve) => {
+        markProcessStarted = resolve;
+      });
+      const child = new EventEmitter() as ChildProcess;
+      Object.defineProperty(child, "stderr", { value: null });
+      Object.defineProperty(child, "stdout", { value: null });
+      child.kill = vi.fn(() => true);
+      const service = createDatabaseBackupService({
+        databaseUrl: () => DATABASE_URL,
+        run: async (request) => {
+          await writeFile(request.args.at(-1)!, "partial");
+          markProcessStarted();
+          return runDatabaseBackupProcess(request, () => child);
+        },
+        tempRoot: root,
+        verifyTools: async () => {},
+      });
+
+      const generation = service.generate();
+      const rejection = expect(generation).rejects.toBeInstanceOf(
+        BackupGenerationError,
+      );
+      await processStarted;
+      expect(service.isBusy()).toBe(true);
+      child.emit("spawn");
+      await vi.advanceTimersByTimeAsync(61_000);
+      await rejection;
+
+      expect(service.isBusy()).toBe(true);
+      expect(await readdir(root)).toHaveLength(1);
+      await expect(service.generate()).rejects.toBeInstanceOf(BackupBusyError);
+
+      child.emit("close", null, "SIGKILL");
+      vi.useRealTimers();
+      await vi.waitFor(() => expect(service.isBusy()).toBe(false));
+      expect(await readdir(root)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

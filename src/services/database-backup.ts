@@ -1,5 +1,4 @@
 import {
-  execFile,
   spawn,
   type ChildProcess,
   type SpawnOptions,
@@ -17,7 +16,8 @@ import {
 import { join } from "node:path";
 
 const PROCESS_TIMEOUT_MS = 60_000;
-const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+const PROCESS_CLOSE_TIMEOUT_MS = 1_000;
+const TOOL_VERSION_TIMEOUT_MS = 5_000;
 const REQUEST_PREFIX = "request-";
 
 export class BackupBusyError extends Error {
@@ -34,6 +34,16 @@ export class BackupGenerationError extends Error {
   }
 }
 
+export class BackupProcessUnconfirmedTerminationError extends Error {
+  constructor(
+    message: string,
+    readonly closed: Promise<void>,
+  ) {
+    super(message);
+    this.name = "BackupProcessUnconfirmedTerminationError";
+  }
+}
+
 type LibpqEnv = Record<string, string> & {
   PGDATABASE: string;
   PGHOST: string;
@@ -43,6 +53,8 @@ type LibpqEnv = Record<string, string> & {
 };
 
 export function databaseUrlToLibpqEnv(connectionString: string): LibpqEnv {
+  // Keep this TypeScript/Next boundary independent from the standalone .mjs
+  // recovery command. Matching fixtures in both test suites enforce parity.
   let url: URL;
   try {
     url = new URL(connectionString);
@@ -73,9 +85,10 @@ export interface ProcessRequest {
   env: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs: number;
+  captureOutput?: boolean;
 }
 
-type ProcessRunner = (request: ProcessRequest) => Promise<void>;
+type ProcessRunner = (request: ProcessRequest) => Promise<string | void>;
 type StartProcess = (
   command: "pg_dump" | "pg_restore",
   args: string[],
@@ -83,17 +96,25 @@ type StartProcess = (
 ) => ChildProcess;
 
 export async function runDatabaseBackupProcess(
-  { command, args, env, signal, timeoutMs }: ProcessRequest,
+  { command, args, captureOutput = false, env, signal, timeoutMs }: ProcessRequest,
   startProcess: StartProcess = (literalCommand, literalArgs, options) =>
     literalCommand === "pg_dump"
       ? spawn("pg_dump", literalArgs, options)
       : spawn("pg_restore", literalArgs, options),
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
+): Promise<string> {
+  let markClosed!: () => void;
+  const closed = new Promise<void>((resolve) => {
+    markClosed = resolve;
+  });
+  return await new Promise<string>((resolve, reject) => {
     const options = {
       env,
       shell: false,
-      stdio: ["ignore", "ignore", "pipe"] as ["ignore", "ignore", "pipe"],
+      stdio: [
+        "ignore",
+        captureOutput ? "pipe" : "ignore",
+        "pipe",
+      ] as SpawnOptions["stdio"],
       windowsHide: true,
     };
     // Literal executable names keep Next's production file tracer scoped. A
@@ -101,35 +122,62 @@ export async function runDatabaseBackupProcess(
     const child = startProcess(command, args, options);
     let settled = false;
     let spawned = false;
+    let terminationStarted = false;
     let terminationError: Error | undefined;
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    let stdout = "";
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(closeTimer);
       signal?.removeEventListener("abort", abort);
       if (error) reject(error);
-      else resolve();
+      else resolve(stdout);
     };
     const terminate = (error: Error) => {
-      if (terminationError || settled) return;
-      terminationError = error;
+      if (terminationStarted || settled) return;
+      terminationStarted = true;
+      terminationError ??= error;
       // Keep the single-flight lease until `close`: kill() only requests
-      // termination, and the child may still hold the archive open afterward.
-      child.kill("SIGKILL");
+      // termination. A successful SIGKILL also gives the process a bounded
+      // grace period to report close before it is treated as terminated.
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // Ownership still remains with the reaper until `close` is observed.
+      }
+      closeTimer = setTimeout(
+        () =>
+          finish(
+            new BackupProcessUnconfirmedTerminationError(
+              terminationError?.message ?? "Database backup process did not close",
+              closed,
+            ),
+          ),
+        PROCESS_CLOSE_TIMEOUT_MS,
+      );
     };
     const abort = () => terminate(new Error("Database backup process cancelled"));
     const timer = setTimeout(() => {
       terminate(new Error("Database backup process timed out"));
     }, timeoutMs);
     child.stderr?.resume();
+    child.stdout?.on("data", (chunk) => {
+      if (stdout.length < 10_000) stdout += chunk.toString();
+    });
     child.once("spawn", () => {
       spawned = true;
     });
     child.once("error", (error) => {
-      if (!spawned) finish(error);
-      else terminationError ??= error;
+      if (!spawned) {
+        markClosed();
+        finish(error);
+      }
+      else terminate(error);
     });
     child.once("close", (code, childSignal) => {
+      markClosed();
       if (terminationError) finish(terminationError);
       else if (code === 0) finish();
       else finish(new Error(`Database backup process failed (${code ?? childSignal})`));
@@ -163,22 +211,27 @@ export function isPostgres17Version(output: string): boolean {
   return /\(PostgreSQL\) 17\./.test(output);
 }
 
-async function verifyPostgres17Tools() {
-  const version = (command: "pg_dump" | "pg_restore") =>
-    new Promise<string>((resolve, reject) => {
-      const callback = (error: Error | null, stdout: string) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      };
-      if (command === "pg_dump") {
-        execFile("pg_dump", ["--version"], { windowsHide: true }, callback);
-      } else {
-        execFile("pg_restore", ["--version"], { windowsHide: true }, callback);
-      }
-    }).catch(() => "");
-
+export async function verifyPostgres17Tools(
+  timeoutMs = TOOL_VERSION_TIMEOUT_MS,
+  startProcess?: StartProcess,
+) {
   for (const command of ["pg_dump", "pg_restore"] as const) {
-    const output = await version(command);
+    let output: string;
+    try {
+      output = await runDatabaseBackupProcess(
+        {
+          command,
+          args: ["--version"],
+          captureOutput: true,
+          env: { ...process.env },
+          timeoutMs,
+        },
+        startProcess,
+      );
+    } catch (error) {
+      if (error instanceof BackupProcessUnconfirmedTerminationError) throw error;
+      throw new BackupGenerationError();
+    }
     if (!isPostgres17Version(output)) throw new BackupGenerationError();
   }
 }
@@ -191,8 +244,9 @@ export function createDatabaseBackupService({
   verifyTools = verifyPostgres17Tools,
 }: BackupServiceOptions = {}) {
   let generating = false;
+  const liveRequestDirectories = new Set<string>();
 
-  async function purgeStaleArtifacts(currentTime: Date) {
+  async function purgeOrphanedArtifacts() {
     await mkdir(/* turbopackIgnore: true */ tempRoot, {
       recursive: true,
       mode: 0o700,
@@ -206,8 +260,7 @@ export function createDatabaseBackupService({
         .filter((entry) => entry.isDirectory() && entry.name.startsWith(REQUEST_PREFIX))
         .map(async (entry) => {
           const path = join(/* turbopackIgnore: true */ tempRoot, entry.name);
-          const details = await stat(/* turbopackIgnore: true */ path);
-          if (currentTime.getTime() - details.mtimeMs > STALE_AFTER_MS) {
+          if (!liveRequestDirectories.has(path)) {
             await rm(/* turbopackIgnore: true */ path, {
               recursive: true,
               force: true,
@@ -221,13 +274,15 @@ export function createDatabaseBackupService({
     if (generating) throw new BackupBusyError();
     generating = true;
     let requestDirectory: string | undefined;
+    let ownershipTransferred = false;
     try {
       const generatedAt = now();
-      await purgeStaleArtifacts(generatedAt);
+      await purgeOrphanedArtifacts();
       await verifyTools();
       requestDirectory = await mkdtemp(
         join(/* turbopackIgnore: true */ tempRoot, REQUEST_PREFIX),
       );
+      liveRequestDirectories.add(requestDirectory);
       await chmod(/* turbopackIgnore: true */ requestDirectory, 0o700);
       const stamp = generatedAt
         .toISOString()
@@ -277,25 +332,47 @@ export function createDatabaseBackupService({
         async dispose() {
           if (disposed) return;
           disposed = true;
-          await rm(/* turbopackIgnore: true */ requestDirectory!, {
-            recursive: true,
-            force: true,
-          });
+          try {
+            await rm(/* turbopackIgnore: true */ requestDirectory!, {
+              recursive: true,
+              force: true,
+            });
+          } finally {
+            liveRequestDirectories.delete(requestDirectory!);
+          }
         },
       };
     } catch (error) {
+      if (error instanceof BackupProcessUnconfirmedTerminationError) {
+        ownershipTransferred = true;
+        const ownedDirectory = requestDirectory;
+        void error.closed
+          .then(async () => {
+            if (!ownedDirectory) return;
+            await rm(/* turbopackIgnore: true */ ownedDirectory, {
+              recursive: true,
+              force: true,
+            }).catch(() => {});
+            liveRequestDirectories.delete(ownedDirectory);
+          })
+          .finally(() => {
+            generating = false;
+          });
+        throw new BackupGenerationError();
+      }
       if (requestDirectory) {
         await rm(/* turbopackIgnore: true */ requestDirectory, {
           recursive: true,
           force: true,
         }).catch(() => {});
+        liveRequestDirectories.delete(requestDirectory);
       }
       if (error instanceof BackupBusyError || error instanceof BackupGenerationError) {
         throw error;
       }
       throw new BackupGenerationError();
     } finally {
-      generating = false;
+      if (!ownershipTransferred) generating = false;
     }
   }
 

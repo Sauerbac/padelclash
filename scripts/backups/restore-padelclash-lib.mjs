@@ -1,26 +1,120 @@
 import { spawn } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 
 const EMPTY_TARGET_QUERY = `
-SELECT
-  (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-     AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f'))
-  +
-  (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema'))
-  +
-  (SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
-   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
-     AND t.typtype IN ('c', 'd', 'e'))
-  +
-  (SELECT count(*) FROM pg_namespace n
-   WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'public')
-     AND n.nspname NOT LIKE 'pg_toast%'
-     AND n.nspname NOT LIKE 'pg_temp_%');
+WITH non_system_namespaces AS (
+  SELECT oid
+  FROM pg_namespace
+  WHERE nspname NOT IN ('pg_catalog', 'information_schema')
+    AND nspname NOT LIKE 'pg_toast%'
+    AND nspname NOT LIKE 'pg_temp_%'
+), target_objects AS (
+  SELECT 'relation', c.oid::text FROM pg_class c
+    JOIN non_system_namespaces n ON n.oid = c.relnamespace
+  UNION ALL
+  SELECT 'routine', p.oid::text FROM pg_proc p
+    JOIN non_system_namespaces n ON n.oid = p.pronamespace
+  UNION ALL
+  SELECT 'type', t.oid::text FROM pg_type t
+    JOIN non_system_namespaces n ON n.oid = t.typnamespace
+  UNION ALL
+  SELECT 'collation', c.oid::text FROM pg_collation c
+    JOIN non_system_namespaces n ON n.oid = c.collnamespace
+  UNION ALL
+  SELECT 'conversion', c.oid::text FROM pg_conversion c
+    JOIN non_system_namespaces n ON n.oid = c.connamespace
+  UNION ALL
+  SELECT 'operator', o.oid::text FROM pg_operator o
+    JOIN non_system_namespaces n ON n.oid = o.oprnamespace
+  UNION ALL
+  SELECT 'operator class', o.oid::text FROM pg_opclass o
+    JOIN non_system_namespaces n ON n.oid = o.opcnamespace
+  UNION ALL
+  SELECT 'operator family', o.oid::text FROM pg_opfamily o
+    JOIN non_system_namespaces n ON n.oid = o.opfnamespace
+  UNION ALL
+  SELECT 'text search configuration', c.oid::text FROM pg_ts_config c
+    JOIN non_system_namespaces n ON n.oid = c.cfgnamespace
+  UNION ALL
+  SELECT 'text search dictionary', d.oid::text FROM pg_ts_dict d
+    JOIN non_system_namespaces n ON n.oid = d.dictnamespace
+  UNION ALL
+  SELECT 'text search parser', p.oid::text FROM pg_ts_parser p
+    JOIN non_system_namespaces n ON n.oid = p.prsnamespace
+  UNION ALL
+  SELECT 'text search template', t.oid::text FROM pg_ts_template t
+    JOIN non_system_namespaces n ON n.oid = t.tmplnamespace
+  UNION ALL
+  SELECT 'statistics', s.oid::text FROM pg_statistic_ext s
+    JOIN non_system_namespaces n ON n.oid = s.stxnamespace
+  UNION ALL
+  SELECT 'namespace', n.oid::text FROM pg_namespace n
+    WHERE n.oid IN (SELECT oid FROM non_system_namespaces)
+      AND n.nspname <> 'public'
+  UNION ALL
+  SELECT 'extension', e.oid::text FROM pg_extension e WHERE e.extname <> 'plpgsql'
+  UNION ALL
+  SELECT 'cast', c.oid::text FROM pg_cast c WHERE c.oid >= 16384
+  UNION ALL
+  SELECT 'language', l.oid::text FROM pg_language l
+    WHERE l.lanname NOT IN ('internal', 'c', 'sql', 'plpgsql')
+  UNION ALL
+  SELECT 'foreign-data wrapper', f.oid::text FROM pg_foreign_data_wrapper f
+  UNION ALL
+  SELECT 'foreign server', s.oid::text FROM pg_foreign_server s
+  UNION ALL
+  SELECT 'user mapping', u.umid::text FROM pg_user_mappings u
+  UNION ALL
+  SELECT 'event trigger', e.oid::text FROM pg_event_trigger e
+  UNION ALL
+  SELECT 'publication', p.oid::text FROM pg_publication p
+  UNION ALL
+  SELECT 'subscription', s.oid::text FROM pg_subscription s
+    JOIN pg_database d ON d.oid = s.subdbid
+    WHERE d.datname = current_database()
+  UNION ALL
+  SELECT 'large object', l.oid::text FROM pg_largeobject_metadata l
+  UNION ALL
+  SELECT 'default privileges', d.oid::text FROM pg_default_acl d
+  UNION ALL
+  SELECT 'security label', s.objoid::text FROM pg_seclabel s
+  UNION ALL
+  SELECT 'database setting', s.setrole::text FROM pg_db_role_setting s
+    JOIN pg_database d ON d.oid = s.setdatabase
+    WHERE d.datname = current_database()
+  UNION ALL
+  SELECT 'database ACL', d.oid::text FROM pg_database d
+    WHERE d.datname = current_database() AND d.datacl IS NOT NULL
+)
+SELECT count(*) FROM target_objects;
 `;
 
+const CUSTOM_ARCHIVE_SIGNATURE = Buffer.from("PGDMP");
+
+async function inspectArchive(archivePath) {
+  const details = await stat(archivePath);
+  if (!details.isFile()) return { custom: false, file: false, size: details.size };
+  if (details.size <= 0) return { custom: false, file: true, size: details.size };
+
+  const handle = await open(archivePath, "r");
+  try {
+    const signature = Buffer.alloc(CUSTOM_ARCHIVE_SIGNATURE.length);
+    const { bytesRead } = await handle.read(signature, 0, signature.length, 0);
+    return {
+      custom:
+        bytesRead === CUSTOM_ARCHIVE_SIGNATURE.length &&
+        signature.equals(CUSTOM_ARCHIVE_SIGNATURE),
+      file: true,
+      size: details.size,
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
 export function connectionEnvironment(databaseUrl) {
+  // This command must run directly under Node without importing the Next app.
+  // Matching fixtures in both test suites enforce parity with the app parser.
   let url;
   try {
     url = new URL(databaseUrl);
@@ -82,17 +176,26 @@ async function requirePostgres17(command, env, run) {
 export async function restorePadelClash({
   archivePath,
   databaseUrl,
-  fileSize = async (path) => (await stat(path)).size,
   run = runRecoveryProcess,
 }) {
   if (!archivePath) throw new Error("A trusted PadelClash archive is required.");
-  let size;
+  let archive;
   try {
-    size = await fileSize(archivePath);
+    archive = await inspectArchive(archivePath);
   } catch {
     throw new Error("The trusted PadelClash archive could not be read.");
   }
-  if (size <= 0) throw new Error("The trusted PadelClash archive is empty.");
+  if (!archive.file) {
+    throw new Error(
+      "The trusted PadelClash archive is not a PostgreSQL custom archive.",
+    );
+  }
+  if (archive.size <= 0) throw new Error("The trusted PadelClash archive is empty.");
+  if (!archive.custom) {
+    throw new Error(
+      "The trusted PadelClash archive is not a PostgreSQL custom archive.",
+    );
+  }
 
   const { database, env } = connectionEnvironment(databaseUrl);
   await requirePostgres17("pg_restore", env, run);
