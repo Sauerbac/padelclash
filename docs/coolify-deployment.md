@@ -42,6 +42,12 @@ The topology trade-off is recorded in
 - [x] Add and locally verify append-only backup pull, PostgreSQL 17 archive
   validation, independent retention/staleness reporting and disposable restore
   tooling.
+- [x] Add and verify the Admin-only fresh database download, including
+  PostgreSQL 17 client tools, bounded temporary-file handling and gallery states.
+- [x] Add and verify the production disaster-recovery command: PostgreSQL 17,
+  empty-target refusal, single-transaction restore and current-app startup.
+- [x] Stop passing `DATABASE_URL` in the fallback `pg_dump` process arguments;
+  use libpq environment variables and rerun the backup-tool integration tests.
 - [ ] Configure and test the off-VPS backup path described below.
 - [x] Complete the local automated, Docker/Compose and headless-browser
   verification gate.
@@ -72,6 +78,20 @@ volume. It must:
 6. be restored into a disposable PostgreSQL instance at least once before the
    backup process is considered proven.
 
+There are two complementary ways to obtain that same archive:
+
+- **Automated recovery baseline:** PostgreSQL creates daily generations on the
+  VPS and the encrypted Windows PC catches up every missing generation over
+  SSH. After the one-time configuration, this needs no manual SSH session for
+  each backup.
+- **Admin convenience copy:** `Download backup` creates a fresh, validated dump
+  for the current browser. It neither reads the scheduled dump directory nor
+  replaces the automated schedule, retention, stale-copy warning or disposable
+  restore test.
+
+The full accepted design, including failure and security analysis, is in
+[Admin database backup and disaster recovery](./design/admin-database-backup-and-recovery.md).
+
 The PC runs a catch-up pull over SSH/SFTP at sign-in, when networking becomes
 available, and daily while it is running. It copies every remote dump that is
 missing locally; it never mirrors remote deletions. It retains 90 daily and 12
@@ -97,6 +117,20 @@ together.
 
 Before any destructive or backward-incompatible migration, create and verify a
 fresh manual dump regardless of the normal schedule.
+
+### Admin convenience download
+
+An authenticated Admin may request a fresh
+`padelclash-YYYYMMDDTHHMMSSZ.dump` from the final section of `/admin`. The app
+creates it with PostgreSQL 17 client tools, validates it before delivery, and
+removes its private temporary artifact afterward. The browser receives it over
+HTTPS with no-store response headers.
+
+The file contains the complete private database, including Device Binding
+hashes and readable Onboarding Link tokens. It has no additional application
+password or encryption layer, so it belongs only on an encrypted device. The
+app deliberately records no last-download time: a server response cannot prove
+that the browser kept the file.
 
 ### Repository backup tooling
 
@@ -149,7 +183,52 @@ Prove one generation with the disposable restore helper:
 
 It validates the archive, creates a randomly named ephemeral PostgreSQL 17
 container, restores into a new `padelclash_restore` database, then stops the
-container. It has no production database target.
+container. It has no production database target and must not be repurposed as
+one.
+
+### Full-server recovery
+
+Production recovery is only for a lost server and a fresh empty database. It is
+not an Admin-panel operation and not an undo mechanism. Use a trusted archive
+from this installation and PostgreSQL 17 client tools; catalogue readability is
+not proof that an untrusted archive is safe.
+
+1. Provision the replacement PostgreSQL 17 service and empty `padelclash`
+   database. Configure the new private connection and a separately recovered
+   `ADMIN_PASSWORD`, but keep the application stopped.
+2. On a trusted machine with Node.js and PostgreSQL 17 client tools, make the
+   private target reachable and select the verified archive. Prefer the newest
+   generation from before the loss unless logical corruption requires an older
+   one.
+3. Run the repository-owned command. Keep the connection string in the
+   environment, not on its command line:
+
+   ```sh
+   DATABASE_URL='postgresql://...fresh-target...' \
+     node scripts/backups/restore-padelclash.mjs \
+     /secure/path/padelclash-YYYYMMDDTHHMMSSZ.dump
+   ```
+
+   The command requires PostgreSQL 17, validates the custom archive catalogue,
+   refuses a non-empty application target, restores with
+   `--single-transaction --no-owner --no-acl`, and runs `ANALYZE` only after the
+   restore commits. A restore error leaves the previously empty target empty.
+4. Start the current application version, which must be at least as new as the
+   backed-up deployment. Startup applies newer migrations and rebuilds Rating
+   projections from the Match log.
+5. Require HTTP 200 and `{"status":"ok"}` from `/api/health`. Log in as Admin,
+   inspect the roster and Match history, and verify the newest Match expected at
+   the selected recovery point.
+6. Revoke again any Device Binding or Onboarding Link that was revoked after
+   the backup point.
+7. Reconfigure the daily VPS dump and Windows catch-up pull, create and pull a
+   fresh generation, and run `Test-PadelClashRestore.ps1` against it.
+
+The dump restores Device Bindings and Onboarding Links exactly as they existed.
+Access revoked after the chosen backup point returns and must be revoked again
+when relevant. `ADMIN_PASSWORD` is not in PostgreSQL and must be recovered from
+the password manager/Coolify configuration separately; the new PostgreSQL
+runtime password may differ from the lost server's password.
 
 After the destination encryption and SSH key are confirmed, register sign-in,
 daily and network-available catch-up triggers from an elevated PowerShell:
@@ -167,7 +246,7 @@ Run both registered tasks manually once and inspect Task Scheduler history.
 Task registration, the real paths/account/key, destination encryption and the
 Coolify backup schedule remain operator steps.
 
-### Local artifact verification (2026-07-22)
+### Local artifact verification (baseline 2026-07-22; backup recovery 2026-08-04)
 
 - [x] Fresh PostgreSQL 17 volume migrated before Next started; the app became
   healthy and returned healthy again after restart.
@@ -183,6 +262,14 @@ Coolify backup schedule remain operator steps.
 - [x] Disposable PostgreSQL 17 fixtures proved multi-generation catch-up,
   remote rotation without local deletion, corrupt/empty rejection, staleness
   detection and full restore.
+- [x] Admin backup service and route tests proved authorization/origin refusal,
+  one-process admission, bounded shell-free PostgreSQL calls, sanitized errors,
+  strict response headers, and artifact cleanup after delivery or cancellation.
+- [x] The fallback dump tests proved the connection string is absent from
+  `pg_dump` arguments and removed from its inherited environment name.
+- [x] A disposable PostgreSQL 17 recovery exercise proved non-empty refusal, transactional
+  rollback on forced restore failure, `ANALYZE`, current-app startup, Rating
+  projection rebuild, health, roster, and Match-history inspection.
 
 These checks prove the repository artifact. They do not check the boxes below
 that require the real domain, VPS, scheduled PC job or physical installed PWA.

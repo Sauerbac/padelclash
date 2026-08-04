@@ -2,6 +2,17 @@ $ErrorActionPreference = "Stop"
 
 Import-Module "$PSScriptRoot/../PadelClashBackup.psm1" -Force
 
+$fallbackScript = Get-Content -LiteralPath "$PSScriptRoot/../create-postgres-backup.sh" -Raw
+if ($fallbackScript -match 'pg_dump[^\r\n]*DATABASE_URL') {
+    throw "Fallback backup must not place DATABASE_URL in pg_dump arguments"
+}
+if ($fallbackScript -notmatch 'PGDATABASE="\$DATABASE_URL"') {
+    throw "Fallback backup must pass the connection through libpq environment variables"
+}
+if ($fallbackScript -notmatch 'unset DATABASE_URL') {
+    throw "Fallback backup must remove DATABASE_URL before starting pg_dump"
+}
+
 function Assert-Equal($Actual, $Expected, [string]$Message) {
     if ("$Actual" -ne "$Expected") {
         throw "$Message. Expected '$Expected', got '$Actual'."

@@ -20,9 +20,18 @@ archive="$BACKUP_DIRECTORY/padelclash-$stamp.dump"
 partial="$archive.partial"
 
 trap 'rm -f "$partial"' EXIT
-pg_dump --dbname="$DATABASE_URL" --format=custom --no-acl --no-owner --file="$partial"
+PGDATABASE="$DATABASE_URL"
+export PGDATABASE
+unset DATABASE_URL
+if ! pg_dump --format=custom --no-acl --no-owner --file="$partial" 2>/dev/null; then
+  echo "PostgreSQL backup generation failed" >&2
+  exit 1
+fi
 test -s "$partial"
-pg_restore --list "$partial" >/dev/null
+if ! pg_restore --list "$partial" >/dev/null 2>&1; then
+  echo "PostgreSQL backup validation failed" >&2
+  exit 1
+fi
 mv "$partial" "$archive"
 trap - EXIT
 

@@ -58,6 +58,7 @@ const adminActions: AdminViewActions = {
     deletePlayer: async () => ({ ok: true }),
     getBindingHistory: async () => [],
   },
+  downloadBackup: async () => {},
 };
 
 function AutoClick({

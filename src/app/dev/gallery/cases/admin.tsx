@@ -1,4 +1,5 @@
 import type { PlayerStatus } from "@/domain/onboarding";
+import type { DatabaseBackupState } from "@/components/admin/database-backup-control";
 import type { AdminRoster, RosterEntry } from "@/services/players";
 import {
   FixtureAdminCreateError,
@@ -109,7 +110,55 @@ const FAILURE_ROSTER: AdminRoster = {
   retired: [],
 };
 
+const DATABASE_BACKUP_CASES: Record<DatabaseBackupState, ScreenCase> = {
+  idle: {
+    title: "Database backup idle",
+    note: "The final Admin section warns about private data and offers one download action.",
+    render: () =>
+      inert(
+        <AdminView
+          state="panel"
+          roster={{ joined: [], notJoined: [], retired: [] }}
+          generalLink={null}
+          now={NOW}
+          initialBackupState="idle"
+        />,
+      ),
+  },
+  preparing: {
+    title: "Database backup preparing",
+    note: "The action is disabled and communicates that generation and validation are in progress.",
+    render: () =>
+      inert(
+        <AdminView
+          state="panel"
+          roster={{ joined: [], notJoined: [], retired: [] }}
+          generalLink={null}
+          now={NOW}
+          initialBackupState="preparing"
+        />,
+      ),
+  },
+  failure: {
+    title: "Database backup failure",
+    note: "A sanitized inline failure leaves the download action available as a retry path.",
+    render: () =>
+      inert(
+        <AdminView
+          state="panel"
+          roster={{ joined: [], notJoined: [], retired: [] }}
+          generalLink={null}
+          now={NOW}
+          initialBackupState="failure"
+        />,
+      ),
+  },
+};
+
 export const ADMIN_CASES: Record<string, ScreenCase> = {
+  "backup-idle": DATABASE_BACKUP_CASES.idle,
+  "backup-preparing": DATABASE_BACKUP_CASES.preparing,
+  "backup-failure": DATABASE_BACKUP_CASES.failure,
   login: {
     title: "Signed out",
     note: "Standalone password form with no application tab bar.",

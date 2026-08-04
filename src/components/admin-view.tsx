@@ -9,6 +9,11 @@ import {
   type CreatePlayer,
 } from "@/components/admin/create-player-form";
 import {
+  DatabaseBackupControl,
+  type DatabaseBackupState,
+  type DownloadDatabaseBackup,
+} from "@/components/admin/database-backup-control";
+import {
   GeneralLinkControl,
   type GeneralLinkActions,
 } from "@/components/admin/general-link-control";
@@ -25,6 +30,7 @@ export interface AdminViewActions {
   createPlayer?: CreatePlayer;
   generalLink?: GeneralLinkActions;
   playerRow?: PlayerRowActions;
+  downloadBackup?: DownloadDatabaseBackup;
 }
 
 type AdminViewProps =
@@ -36,6 +42,7 @@ type AdminViewProps =
       now: Date;
       initialRosterSearch?: string;
       initialExpandedPlayerId?: string | null;
+      initialBackupState?: DatabaseBackupState;
     };
 
 export function AdminView(
@@ -103,6 +110,16 @@ export function AdminView(
         initialSearch={props.initialRosterSearch}
         initialExpandedPlayerId={props.initialExpandedPlayerId}
       />
+
+      <section>
+        <h2 className="section-label text-primary">Database backup</h2>
+        <div className="mt-2.5">
+          <DatabaseBackupControl
+            download={props.actions?.downloadBackup}
+            initialState={props.initialBackupState}
+          />
+        </div>
+      </section>
     </main>
   );
 }
