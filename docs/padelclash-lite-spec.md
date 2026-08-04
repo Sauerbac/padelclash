@@ -171,11 +171,17 @@ no user table needed). Admin can, from any device:
 - browse player-facing screens without a Device Binding; logging a new Match still
   requires a Player binding because every Match has a Player Logger
 
-Admin groups the roster into **Joined**, **Not Joined**, and **Retired**. Joined rows
-show binding creation and last-seen timestamps plus rename, replace, revoke, and retire
-actions. Not Joined rows offer rename, Personal Link controls, conditional delete, and
-retire. Retired rows offer restore and conditional delete. Match surfaces expose the
-stored Logger to Admin for accountability; no broader activity-tracking system is added.
+The Admin Panel keeps General Onboarding and Add Player above the roster. Admin groups
+the roster into **Joined**, **Not Joined**, and **Retired**, with Player Names sorted
+alphabetically inside each group. One live Player Name search filters all three groups.
+Groups remain open, but Player rows are collapsed to the name and an expand affordance;
+at most one Player is expanded across the entire roster. Expanding a Player reveals the
+current status details, Device history disclosure, and management actions. Joined
+Players expose binding creation and last-seen timestamps plus rename, replace, revoke,
+and retire actions. Not Joined Players offer rename, Personal Link controls,
+conditional delete, and retire. Retired Players offer restore and conditional delete.
+Match surfaces expose the stored Logger to Admin for accountability; no broader
+activity-tracking system is added.
 
 ### Edit rights (players)
 
@@ -630,3 +636,10 @@ they earned interest during the grilling:
 | 131 | Long-name Log Match coverage | Winner controls remain two side-by-side team cards around `VS`. Each active participant slot gets one single-line row within the Side's card, with empty-slot placeholders preserving the two-row doubles layout; overlong names truncate with an ellipsis instead of wrapping or breaking, while a Guest marker never truncates. A dedicated gallery case exercises four long doubles names at 320, 390 and 430 pixels |
 | 132 | Searchable bounded participant pickers | Every Log Match participant picker opens with a visible Player search field followed by a locally scrolling option list. The popup has a defined maximum height, keeps search visible while results scroll, hides the native scrollbar, and uses top/bottom shadows that appear only when more results exist in that direction. It stays within a 16px phone-viewport gutter and ellipsizes long selected names and option labels instead of causing page-level horizontal overflow |
 | 133 | Pull-to-refresh on read-heavy tabs | Feed and Rankings support the familiar downward pull only while the app's sole `#scroll-root` scroller is at its top. Crossing a visible threshold and releasing calls the App Router's `router.refresh()`, preserving client/browser state while re-running the route's private server reads; short pulls do nothing. The gesture translates only page content, never the viewport-fixed tab bar. Log Match is excluded because an accidental refresh gesture on an input-heavy draft is more harmful than useful. Pulling, release-ready and refreshing states are fixture-reachable in both screens' gallery catalogues, expressed as `Record<PullIndicatorPhase, Case>` so a new closed phase fails typechecking until both catalogues cover it |
+
+## Decision log (2026-08-04, admin roster scaling)
+
+| # | Decision | Call |
+|---|---|---|
+| 134 | Compact searchable Admin roster | General Onboarding and Add Player remain the two sections above the roster. A live, case-insensitive Player Name search spans Joined, Not Joined, and Retired while preserving those groups; zero-match groups hide during a query and a total miss shows one empty result. Groups do not collapse. A closed Player row shows only the Player Name and an expand affordance, and one shared accordion permits at most one expanded Player across the roster. The expanded panel retains the current status details, Device history disclosure, actions, confirmations, and failure behavior; the redesign changes disclosure and findability, not management semantics |
+| 135 | Alphabetical Player selection | Player Names sort alphabetically within each Admin status group and in the shared Log/Edit Match participant picker. Picker filtering and removal of Players already selected in another slot preserve the alphabetical order of the remaining options. No Feed, Leaderboard, match-history, or Guest ordering changes |
