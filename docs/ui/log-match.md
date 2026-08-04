@@ -67,6 +67,11 @@ Each slot is a full-width select control with the placeholder
 already selected in another slot is removed from the other slot’s options,
 preventing a Player from appearing twice or on both sides.
 
+Available Player options are sorted alphabetically using a locale-aware,
+case-insensitive comparison. Removing selected Players or adding a retired
+historical participant for Edit Match does not disturb that order. Guest remains
+the separate final option when the current doubles rules allow it.
+
 Opening a picker puts a Player search field first. The option list has a fixed
 maximum height beneath that field and scrolls locally once the roster exceeds
 it; the search remains visible while the results scroll. The native scrollbar

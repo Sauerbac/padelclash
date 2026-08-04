@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ChevronDownIcon } from "lucide-react";
 import {
   deletePlayerAction,
   generatePersonalLinkAction,
@@ -14,7 +15,6 @@ import {
 } from "@/app/actions/admin";
 import type { BindingRecord } from "@/services/access";
 import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
@@ -43,9 +43,15 @@ export interface PlayerRowActions {
  */
 export function PlayerRow({
   entry,
+  expanded,
+  onToggle,
+  onDeleted,
   actions,
 }: {
   entry: RosterEntry;
+  expanded: boolean;
+  onToggle: () => void;
+  onDeleted: (playerId: string) => void;
   /** Gallery stubs; production uses the imported server actions. */
   actions?: PlayerRowActions;
 }) {
@@ -83,158 +89,201 @@ export function PlayerRow({
     });
   }
 
+  const panelId = `player-panel-${entry.id}`;
+
   return (
-    <li className="border px-3.5 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <form
-          action={(formData) =>
-            run(async () => {
-              const state = await rename({}, formData);
-              return state.error
-                ? { ok: false, error: state.error }
-                : { ok: true };
-            })
-          }
-          className="flex flex-1 items-center gap-2"
-        >
-          <input type="hidden" name="playerId" value={entry.id} />
-          <Input
-            name="name"
-            defaultValue={entry.name}
-            aria-label={`Name of ${entry.name}`}
-            className="h-10 text-base uppercase"
-          />
-          <Button type="submit" variant="outline" size="sm" className="text-xs">
-            Rename
-          </Button>
-        </form>
-        {entry.status === "retired" && <Badge variant="retired">Retired</Badge>}
-      </div>
+    <li className="overflow-hidden border">
+      <Button
+        type="button"
+        variant="ghost"
+        size="default"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={onToggle}
+        className="min-h-11 w-full min-w-0 justify-between gap-3 px-3.5 py-2.5 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <span className="min-w-0 truncate text-base font-semibold uppercase">
+          {entry.name}
+        </span>
+        <ChevronDownIcon
+          aria-hidden
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </Button>
 
-      {/* What Admin gets to know about a device (spec decision 53): when it
-          was bound and when it last checked in — enough to answer "is this
-          still the phone they're using?" — and nothing that identifies the
-          hardware itself. */}
-      {entry.binding && (
-        <p className="mt-1.5 font-mono text-xs font-medium text-muted-foreground">
-          joined {formatDate(entry.binding.createdAt)} · last seen{" "}
-          {formatDate(entry.binding.lastSeenAt)}
-        </p>
-      )}
-      {entry.personalLink && (
-        <p className="mt-1 font-mono text-xs font-medium text-accent">
-          invite valid until {formatDate(entry.personalLink.expiresAt)}
-        </p>
-      )}
-
-      <BindingHistory
-        playerId={entry.id}
-        name={entry.name}
-        getBindingHistory={getBindingHistory}
-      />
-
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {entry.personalLink && (
-          <CopyLinkButton
-            path={`/join/${entry.personalLink.token}`}
-            label="Copy invite"
-          />
-        )}
-
-        {entry.status !== "retired" && (
-          <ConfirmDialog
-            trigger={
-              <Button variant="chip" size="xs" disabled={pending}>
-                {entry.status === "joined"
-                  ? "Replace device"
-                  : entry.personalLink
-                    ? "New invite"
-                    : "Invite"}
-              </Button>
+      <div
+        id={panelId}
+        hidden={!expanded}
+        aria-hidden={!expanded}
+        className="border-t px-3.5 pt-3 pb-3.5"
+      >
+          <form
+            action={(formData) =>
+              run(async () => {
+                const state = await rename({}, formData);
+                return state.error
+                  ? { ok: false, error: state.error }
+                  : { ok: true };
+              })
             }
-            title={
-              entry.status === "joined"
-                ? `Replace ${entry.name}'s device?`
-                : `Invite ${entry.name}?`
-            }
-            description={
-              entry.status === "joined"
-                ? "Their current device keeps working until the new link is used, then loses access."
-                : "Creates a single-use link that expires in 7 days. Any previous link stops working."
-            }
-            confirmLabel="Generate link"
-            onConfirm={generateInvite}
-          />
-        )}
-
-        {entry.personalLink && (
-          <Button
-            variant="chip"
-            size="xs"
-            disabled={pending}
-            onClick={() => run(() => revokePersonalLink(entry.id))}
+            className="flex min-w-0 items-center gap-2"
           >
-            Revoke invite
-          </Button>
-        )}
+            <input type="hidden" name="playerId" value={entry.id} />
+            <Input
+              name="name"
+              defaultValue={entry.name}
+              aria-label={`Name of ${entry.name}`}
+              disabled={pending}
+              className="h-10 min-w-0 text-base uppercase"
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              disabled={pending}
+              data-admin-action="rename"
+              className="shrink-0 text-xs"
+            >
+              Rename
+            </Button>
+          </form>
 
-        {entry.status === "joined" && (
-          <ConfirmDialog
-            trigger={
-              <Button variant="destructive" size="xs" disabled={pending}>
-                Revoke access
-              </Button>
-            }
-            title={`Revoke ${entry.name}'s access?`}
-            description="Their device loses access immediately. Their outstanding invite and the circle's General Link are revoked too, so nobody can walk straight back in."
-            confirmLabel="Revoke"
-            onConfirm={() => run(() => revokePlayerAccess(entry.id))}
-          />
-        )}
+          {/* What Admin gets to know about a device (spec decision 53): when it
+              was bound and when it last checked in — enough to answer "is this
+              still the phone they're using?" — and nothing that identifies the
+              hardware itself. */}
+          {entry.binding && (
+            <p className="mt-2 font-mono text-xs font-medium text-muted-foreground">
+              joined {formatDate(entry.binding.createdAt)} · last seen{" "}
+              {formatDate(entry.binding.lastSeenAt)}
+            </p>
+          )}
+          {entry.personalLink && (
+            <p className="mt-1 font-mono text-xs font-medium text-accent">
+              invite valid until {formatDate(entry.personalLink.expiresAt)}
+            </p>
+          )}
 
-        {entry.status === "retired" ? (
-          <Button
-            variant="chip"
-            size="xs"
-            disabled={pending}
-            onClick={() => run(() => restore(entry.id))}
-          >
-            Restore
-          </Button>
-        ) : (
-          <ConfirmDialog
-            trigger={
-              <Button variant="destructive" size="xs" disabled={pending}>
-                Retire
-              </Button>
-            }
-            title={`Retire ${entry.name}?`}
-            description="They leave the pickers and lose access; their match history stays."
-            confirmLabel="Retire"
-            onConfirm={() => run(() => retire(entry.id))}
+          <BindingHistory
+            playerId={entry.id}
+            name={entry.name}
+            getBindingHistory={getBindingHistory}
           />
-        )}
 
-        {entry.deletable && (
-          <ConfirmDialog
-            trigger={
-              <Button variant="destructive" size="xs" disabled={pending}>
-                Delete
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {entry.personalLink && (
+              <CopyLinkButton
+                path={`/join/${entry.personalLink.token}`}
+                label="Copy invite"
+              />
+            )}
+
+            {entry.status !== "retired" && (
+              <ConfirmDialog
+                trigger={
+                  <Button variant="chip" size="xs" disabled={pending}>
+                    {entry.status === "joined"
+                      ? "Replace device"
+                      : entry.personalLink
+                        ? "New invite"
+                        : "Invite"}
+                  </Button>
+                }
+                title={
+                  entry.status === "joined"
+                    ? `Replace ${entry.name}'s device?`
+                    : `Invite ${entry.name}?`
+                }
+                description={
+                  entry.status === "joined"
+                    ? "Their current device keeps working until the new link is used, then loses access."
+                    : "Creates a single-use link that expires in 7 days. Any previous link stops working."
+                }
+                confirmLabel="Generate link"
+                onConfirm={generateInvite}
+              />
+            )}
+
+            {entry.personalLink && (
+              <Button
+                variant="chip"
+                size="xs"
+                disabled={pending}
+                onClick={() => run(() => revokePersonalLink(entry.id))}
+              >
+                Revoke invite
               </Button>
-            }
-            title={`Delete ${entry.name} for good?`}
-            description="No match references them, so nothing is lost — but this can't be undone."
-            confirmLabel="Delete"
-            onConfirm={() => run(() => deletePlayer(entry.id))}
-          />
-        )}
+            )}
+
+            {entry.status === "joined" && (
+              <ConfirmDialog
+                trigger={
+                  <Button variant="destructive" size="xs" disabled={pending}>
+                    Revoke access
+                  </Button>
+                }
+                title={`Revoke ${entry.name}'s access?`}
+                description="Their device loses access immediately. Their outstanding invite and the circle's General Link are revoked too, so nobody can walk straight back in."
+                confirmLabel="Revoke"
+                onConfirm={() => run(() => revokePlayerAccess(entry.id))}
+              />
+            )}
+
+            {entry.status === "retired" ? (
+              <Button
+                variant="chip"
+                size="xs"
+                disabled={pending}
+                onClick={() => run(() => restore(entry.id))}
+              >
+                Restore
+              </Button>
+            ) : (
+              <ConfirmDialog
+                trigger={
+                  <Button
+                    variant="destructive"
+                    size="xs"
+                    disabled={pending}
+                    data-admin-action="retire"
+                  >
+                    Retire
+                  </Button>
+                }
+                title={`Retire ${entry.name}?`}
+                description="They leave the pickers and lose access; their match history stays."
+                confirmLabel="Retire"
+                onConfirm={() => run(() => retire(entry.id))}
+              />
+            )}
+
+            {entry.deletable && (
+              <ConfirmDialog
+                trigger={
+                  <Button variant="destructive" size="xs" disabled={pending}>
+                    Delete
+                  </Button>
+                }
+                title={`Delete ${entry.name} for good?`}
+                description="No match references them, so nothing is lost — but this can't be undone."
+                confirmLabel="Delete"
+                onConfirm={() =>
+                  run(async () => {
+                    const result = await deletePlayer(entry.id);
+                    if (result.ok) onDeleted(entry.id);
+                    return result;
+                  })
+                }
+              />
+            )}
+          </div>
+
+          {error && (
+            <div className="mt-2.5">
+              <Alert variant="destructive">{error}</Alert>
+            </div>
+          )}
       </div>
-
-      {error && (
-        <div className="mt-2.5">
-          <Alert variant="destructive">{error}</Alert>
-        </div>
-      )}
     </li>
   );
 }

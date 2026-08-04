@@ -219,6 +219,25 @@ export function FixtureAdminView(props: ComponentProps<typeof AdminView>) {
   return <AdminView {...props} actions={adminActions} />;
 }
 
+export function FixtureAdminActionFailure(
+  props: Extract<ComponentProps<typeof AdminView>, { state: "panel" }>,
+) {
+  return (
+    <AutoClick selector='button[data-admin-action="rename"]'>
+      <AdminView
+        {...props}
+        actions={{
+          ...adminActions,
+          playerRow: {
+            ...adminActions.playerRow,
+            rename: async () => ({ error: "Fixture action failed." }),
+          },
+        }}
+      />
+    </AutoClick>
+  );
+}
+
 export function FixtureAdminLoginState({
   scenario,
 }: {

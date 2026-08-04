@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   editMatchAction,
   logMatchAction,
@@ -20,6 +20,10 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
+import {
+  removeSelectedPlayers,
+  sortPlayersByName,
+} from "@/lib/player-roster";
 import {
   toMatchParticipantSides,
   validateMatchIntake,
@@ -98,6 +102,7 @@ export function MatchForm({
   const editMatch = actions?.editMatch ?? editMatchAction;
   const enqueue = actions?.enqueue ?? enqueueMatch;
   const startingDraft = editing ?? initialDraft;
+  const orderedRoster = useMemo(() => sortPlayersByName(roster), [roster]);
   const [doubles, setDoubles] = useState(
     startingDraft ? startingDraft.sides.A.length === 2 : true,
   );
@@ -429,11 +434,10 @@ export function MatchForm({
                       [slot]: participant,
                     }))
                   }
-                  options={roster.filter(
-                    (player) =>
-                      (selected?.kind === "player" &&
-                        player.id === selected.playerId) ||
-                      !selectedPlayerIds.has(player.id),
+                  options={removeSelectedPlayers(
+                    orderedRoster,
+                    selectedPlayerIds,
+                    selected?.kind === "player" ? selected.playerId : undefined,
                   )}
                   allowGuest={
                     doubles &&
