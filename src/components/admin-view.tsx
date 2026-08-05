@@ -18,6 +18,7 @@ import {
   type GeneralLinkActions,
 } from "@/components/admin/general-link-control";
 import type { PlayerRowActions } from "@/components/admin/player-row";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { LinkDetails } from "@/services/onboarding";
@@ -99,11 +100,23 @@ export function AdminView(
             initialState={props.initialBackupState}
           />
           <div className="border-t pt-3">
-            <form action={logoutAction}>
-              <Button variant="outline" type="submit" className="text-muted-foreground">
-                Log out
-              </Button>
-            </form>
+            <ConfirmDialog
+              trigger={
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="text-muted-foreground"
+                  data-admin-logout
+                >
+                  Log out
+                </Button>
+              }
+              title="Log out of Admin?"
+              description="You’ll need the Admin password to open these controls again."
+              cancelLabel="Stay logged in"
+              confirmLabel="Log out"
+              onConfirm={logoutAction}
+            />
           </div>
         </div>
       </section>

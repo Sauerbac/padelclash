@@ -239,6 +239,19 @@ export function FixtureAdminActionFailure(
   );
 }
 
+export function FixtureAdminLogoutConfirmation(
+  props: Omit<
+    Extract<ComponentProps<typeof AdminView>, { state: "panel" }>,
+    "actions"
+  >,
+) {
+  return (
+    <AutoClick selector="[data-admin-logout]">
+      <AdminView {...props} actions={adminActions} />
+    </AutoClick>
+  );
+}
+
 export function FixtureAdminLoginState({
   scenario,
 }: {

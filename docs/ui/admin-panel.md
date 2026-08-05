@@ -98,8 +98,10 @@ that the archive contains all private PadelClash data and should be kept on an
 encrypted device, then offers one `Download backup` action. A valid Admin
 session is sufficient; the password is not requested again.
 
-The same zone contains `Log out`, separated from the backup control. The page
-header retains only `Back to app`.
+The same zone contains `Log out`, separated from the backup control. Tapping it
+opens a confirmation that explains the Admin password is required to return;
+only the confirm action ends the session. The page header retains only `Back to
+app`.
 
 Each click prepares a fresh PostgreSQL custom-format dump. While the server is
 preparing and validating it, the action is disabled and communicates its busy

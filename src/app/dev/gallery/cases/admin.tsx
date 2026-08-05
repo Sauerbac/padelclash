@@ -6,6 +6,7 @@ import {
   FixtureAdminCreateSuccess,
   FixtureAdminActionFailure,
   FixtureAdminLoginState,
+  FixtureAdminLogoutConfirmation,
   FixtureAdminView as AdminView,
 } from "../screen-fixtures-client";
 import type { ScreenCase } from "../screen-cases";
@@ -179,6 +180,18 @@ export const ADMIN_CASES: Record<string, ScreenCase> = {
     title: "Admin authentication pending",
     note: "Checking… replaces the submit label and the action is disabled.",
     render: () => <FixtureAdminLoginState scenario="pending" />,
+  },
+  "logout-confirmation": {
+    title: "Log out confirmation",
+    note: "Log out requires an explicit confirmation and warns that the Admin password is needed to return.",
+    render: () => (
+      <FixtureAdminLogoutConfirmation
+        state="panel"
+        roster={ADMIN_ROSTER}
+        generalLink={null}
+        now={NOW}
+      />
+    ),
   },
   panel: {
     title: "Admin Panel with every Player status",
