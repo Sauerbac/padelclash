@@ -44,6 +44,14 @@ const FULL: LeaderboardEntry[] = [
   },
 ];
 
+const TIED_RATINGS: LeaderboardEntry[] = FULL.slice(0, 3).map((entry, index) => ({
+  ...entry,
+  rating: 1200,
+  rank: index + 1,
+  wins: index === 0 ? 12 : 9,
+  matchesPlayed: index === 0 ? 15 : index === 1 ? 16 : 9,
+}));
+
 function refreshPreview(phase: PullIndicatorPhase) {
   return (
     <TabShell pathname="/leaderboard">
@@ -110,6 +118,19 @@ export const LEADERBOARD_CASES: Record<string, ScreenCase> = {
       <TabShell pathname="/leaderboard">
         <LeaderboardView
           entries={FULL.slice(0, 3)}
+          youId={YOU.id}
+          isAdmin={false}
+        />
+      </TabShell>
+    ),
+  },
+  "tied-ratings": {
+    title: "Podium with tied Ratings",
+    note: "Equal Ratings still produce unique podium positions: wins lead first, then total competitive Matches.",
+    render: () => (
+      <TabShell pathname="/leaderboard">
+        <LeaderboardView
+          entries={TIED_RATINGS}
           youId={YOU.id}
           isAdmin={false}
         />

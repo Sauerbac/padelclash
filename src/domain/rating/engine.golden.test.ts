@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   projectGroup,
+  rankMap,
   replayMatch,
   type PlayerState,
 } from "./engine";
@@ -281,3 +282,49 @@ describe("Guest rating boundary", () => {
     expect(result.next.get("a")?.competitiveMatchesPlayed).toBe(4);
   });
 });
+
+describe("leaderboard ranking", () => {
+  it("breaks Rating ties by wins, competitive Matches, creation time, then Player ID", () => {
+    const sameCreationTime = new Date("2026-01-06T12:00:00Z");
+    const ranks = rankMap([
+      candidate("id-fallback-later", 1100, 4, 7, sameCreationTime),
+      candidate("created-later", 1100, 4, 8, new Date("2026-01-02T12:00:00Z")),
+      candidate("matches-leader", 1100, 4, 10, new Date("2026-01-03T12:00:00Z")),
+      candidate("wins-leader", 1100, 5, 5, new Date("2026-01-04T12:00:00Z")),
+      candidate("rating-leader", 1101, 0, 3, new Date("2026-01-05T12:00:00Z")),
+      candidate("created-earlier", 1100, 4, 8, new Date("2026-01-01T12:00:00Z")),
+      candidate("id-fallback-earlier", 1100, 4, 7, sameCreationTime),
+      {
+        ...candidate("provisional", 9999, 99, 99, new Date("2025-01-01T12:00:00Z")),
+        isRanked: false,
+      },
+    ]);
+
+    expect([...ranks]).toEqual([
+      ["rating-leader", 1],
+      ["wins-leader", 2],
+      ["matches-leader", 3],
+      ["created-earlier", 4],
+      ["created-later", 5],
+      ["id-fallback-earlier", 6],
+      ["id-fallback-later", 7],
+    ]);
+  });
+});
+
+function candidate(
+  playerId: string,
+  rating: number,
+  wins: number,
+  competitiveMatchesPlayed: number,
+  createdAt: Date,
+) {
+  return {
+    playerId,
+    rating,
+    wins,
+    competitiveMatchesPlayed,
+    createdAt,
+    isRanked: true,
+  };
+}

@@ -104,6 +104,47 @@ describe("Match-log read projection", () => {
     });
   });
 
+  it("orders equal Ratings by wins, competitive Matches, then creation time", () => {
+    const tiedPlayers = [
+      player(ids.alex, "Alex", 0),
+      player(ids.blair, "Blair", 1),
+      player(ids.casey, "Casey", 2),
+      player(ids.dana, "Dana", 3),
+    ];
+    const tiedMatches = [
+      match("tie-1", days[0], ids.alex, "A"),
+      match("tie-2", days[0], ids.alex, "A"),
+      match("tie-3", days[1], ids.blair, "A"),
+      match("tie-4", days[1], ids.casey, "A"),
+      match("tie-5", days[2], ids.dana, "A"),
+    ];
+    const tiedParticipants = tiedMatches.flatMap((entry) => [
+      participant(entry.id, entry.loggedBy, null, "A", 0),
+      participant(entry.id, null, `Guest ${entry.id}`, "B", 0),
+    ]);
+    const tiedProjection = createMatchLogProjection({
+      players: tiedPlayers,
+      matches: tiedMatches,
+      participants: tiedParticipants,
+      ratingHistory: [],
+      currentRatings: [
+        current(ids.alex, 1000, 3, true),
+        current(ids.blair, 1000, 3, true),
+        current(ids.casey, 1000, 4, true),
+        current(ids.dana, 1000, 3, true),
+      ],
+    });
+
+    expect(
+      tiedProjection.leaderboard().map(({ name, rank }) => [name, rank]),
+    ).toEqual([
+      ["Alex", 1],
+      ["Casey", 2],
+      ["Blair", 3],
+      ["Dana", 4],
+    ]);
+  });
+
   it("keeps retirees addressable and fresh Players unranked", () => {
     expect(projection.playerDetail(ids.casey)).toMatchObject({
       retired: true,

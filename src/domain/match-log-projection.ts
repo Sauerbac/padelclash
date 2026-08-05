@@ -1,4 +1,4 @@
-import { STARTING_RATING, type MatchSide } from "./rating/engine";
+import { rankMap, STARTING_RATING, type MatchSide } from "./rating/engine";
 import type { SetScore } from "./set-score";
 
 export interface MatchLogSnapshot {
@@ -156,8 +156,20 @@ export function createMatchLogProjection(
       .filter((player) => player.retiredAt === null)
       .map((player) => player.id),
   );
-  const ranks = activeRankMap(snapshot.currentRatings, activeIds);
   const records = recordByPlayer(orderedMatches, participantsByMatch);
+  const ranks = rankMap(
+    snapshot.players.flatMap((player) => {
+      const rating = currentById.get(player.id);
+      if (!rating || !activeIds.has(player.id)) return [];
+      return [
+        {
+          ...rating,
+          wins: records.get(player.id)?.wins ?? 0,
+          createdAt: player.createdAt,
+        },
+      ];
+    }),
+  );
 
   function participantsFor(match: SnapshotMatch): FeedParticipant[] {
     return [...(participantsByMatch.get(match.id) ?? [])]
@@ -287,20 +299,6 @@ function compareMatchesNewestFirst(
     b.loggedAt.getTime() - a.loggedAt.getTime() ||
     (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
   );
-}
-
-function activeRankMap(
-  ratings: SnapshotCurrentRating[],
-  activeIds: ReadonlySet<string>,
-): Map<string, number> {
-  const ranked = ratings
-    .filter((rating) => rating.isRanked && activeIds.has(rating.playerId))
-    .sort(
-      (a, b) =>
-        b.rating - a.rating ||
-        (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
-    );
-  return new Map(ranked.map((rating, index) => [rating.playerId, index + 1]));
 }
 
 function recordByPlayer(

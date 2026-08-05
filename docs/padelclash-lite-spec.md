@@ -670,3 +670,9 @@ they earned interest during the grilling:
 |---|---|---|
 | 150 | Newly created Player handoff | After Add Player succeeds, the new Player remains beneath the form in a permanently open management panel so Admin can immediately issue a Personal Link. That Player is omitted from Search and the normal status groups only while the current Admin page instance remains mounted; the next visit places them in the ordinary roster. `Log out` leaves the header and shares the final `Admin tools` zone with database backup. |
 | 151 | Confirm Admin logout | `Log out` in Admin tools opens a confirmation before ending the Admin session. The dialog warns that the Admin password is required to return; cancelling preserves the session and only the explicit confirm action logs out. |
+
+## Decision log (2026-08-05, Leaderboard Rating ties)
+
+| # | Decision | Call |
+|---|---|---|
+| 152 | Unique Rank tiebreak chain | Active Established Players keep unique leaderboard Ranks. Higher Rating leads; equal Ratings are resolved by more competitive wins, then more total competitive Matches, then earlier roster creation time. Player ID is used only as a deterministic fallback when creation timestamps are also identical. The resulting top three populate the existing podium positions. |

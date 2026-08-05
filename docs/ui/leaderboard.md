@@ -85,9 +85,13 @@ Columns, in order:
 3. `Rating` — current rating rounded to a whole number.
 4. `W–L` — wins and losses, for example `3–1`.
 
-Active players are sorted ranked-first by the shared rank order. Unranked
-players follow, ordered by rating and then name. A player with no matches still
-appears as unranked at the starting rating of 1000 with a `0–0` record.
+Active players are sorted ranked-first by the shared rank order. Ranked Players
+receive unique positions: higher Rating leads; ties are resolved by more wins,
+then more total competitive Matches, then earlier roster creation. Player ID is
+the final deterministic fallback when creation timestamps are identical.
+Unranked players follow, ordered by Rating and then name. A player with no
+Matches still appears as unranked at the starting Rating of 1000 with a `0–0`
+record.
 
 When the viewer’s device is bound to one of the listed players, append a `You`
 badge to that player’s name — on their table row, or on their plinth when they

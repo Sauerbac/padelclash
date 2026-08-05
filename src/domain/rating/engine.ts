@@ -71,6 +71,15 @@ export interface GroupProjection {
   ratingHistory: ParticipantOutput[];
 }
 
+export interface RankCandidate {
+  playerId: PlayerId;
+  rating: number;
+  wins: number;
+  competitiveMatchesPlayed: number;
+  createdAt: Date;
+  isRanked: boolean;
+}
+
 export function expectedScore(ratingFor: number, ratingAgainst: number): number {
   return 1 / (1 + 10 ** ((ratingAgainst - ratingFor) / RATING_DIVISOR));
 }
@@ -249,13 +258,16 @@ export function projectGroup(
 }
 
 export function rankMap(
-  current: ReadonlyMap<PlayerId, CurrentRating>,
+  candidates: readonly RankCandidate[],
 ): Map<PlayerId, number> {
-  const ranked = [...current.values()]
+  const ranked = candidates
     .filter((entry) => entry.isRanked)
     .sort(
       (a, b) =>
         b.rating - a.rating ||
+        b.wins - a.wins ||
+        b.competitiveMatchesPlayed - a.competitiveMatchesPlayed ||
+        a.createdAt.getTime() - b.createdAt.getTime() ||
         (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
     );
   return new Map(ranked.map((entry, index) => [entry.playerId, index + 1]));

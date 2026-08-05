@@ -63,3 +63,7 @@ _Avoid_: Guest, new account
 **Established Player**:
 A Player who has completed at least three rated Matches. Their Rating follows the standard update rules and qualifies for leaderboard rank.
 _Avoid_: Verified Player, veteran
+
+**Rank**:
+A unique position among active Established Players, ordered by Rating, wins, total competitive Matches, and then roster creation time. Higher values lead for the first three measures; earlier creation wins the final domain tie.
+_Avoid_: Row number, shared placement
