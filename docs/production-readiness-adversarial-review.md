@@ -1,7 +1,7 @@
 # Production-readiness adversarial review
 
 Reviewed 2026-07-22 against the current repository, the production decisions in
-`padelclash-lite-spec.md`, the Coolify deployment model, and the intended iOS
+`padelclash-spec.md`, the Coolify deployment model, and the intended iOS
 and Android installed-PWA behavior.
 
 ## Verdict

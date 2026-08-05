@@ -9,9 +9,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 A padel match tracker for one private circle — iOS-installable PWA. This branch
 (`lite-rewrite`) is a clean-slate rewrite; the old app is archived on `main`.
 
-**Source of truth: [docs/padelclash-lite-spec.md](docs/padelclash-lite-spec.md).**
-All decisions predating the spec are void unless restated there. New decisions get
-added to the spec's decision log.
+**Source of truth: [docs/padelclash-spec.md](docs/padelclash-spec.md).** Always read
+that short index, then read only the topic files it identifies for the task. Read the
+complete specification only for genuinely cross-cutting work. All decisions predating
+the specification are void unless restated there. Record a new decision in exactly one
+topic: update its current-behavior prose and append to that topic's decision history.
 
 ## Architecture rules
 
