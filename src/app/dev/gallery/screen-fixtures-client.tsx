@@ -298,3 +298,38 @@ export function FixtureAdminCreateError(
     </div>
   );
 }
+
+export function FixtureAdminCreateSuccess(
+  props: Omit<
+    Extract<ComponentProps<typeof AdminView>, { state: "panel" }>,
+    "actions"
+  > & { player: { id: string; name: string } },
+) {
+  const { player, ...viewProps } = props;
+  const root = useRef<HTMLDivElement>(null);
+  const driven = useRef(false);
+
+  useEffect(() => {
+    if (driven.current) return;
+    driven.current = true;
+    const form = root.current?.querySelector<HTMLFormElement>(
+      "[data-create-player]",
+    );
+    const input = form?.querySelector<HTMLInputElement>('input[name="name"]');
+    if (!form || !input) return;
+    input.value = player.name;
+    form.requestSubmit();
+  }, [player.name]);
+
+  return (
+    <div ref={root}>
+      <AdminView
+        {...viewProps}
+        actions={{
+          ...adminActions,
+          createPlayer: async () => ({ createdPlayers: [player] }),
+        }}
+      />
+    </div>
+  );
+}

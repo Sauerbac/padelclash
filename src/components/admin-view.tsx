@@ -5,9 +5,9 @@ import {
   type AdminLoginAction,
 } from "@/components/admin/admin-login";
 import {
-  CreatePlayerForm,
+  PlayerManagement,
   type CreatePlayer,
-} from "@/components/admin/create-player-form";
+} from "@/components/admin/player-management";
 import {
   DatabaseBackupControl,
   type DatabaseBackupState,
@@ -17,7 +17,6 @@ import {
   GeneralLinkControl,
   type GeneralLinkActions,
 } from "@/components/admin/general-link-control";
-import { AdminRoster } from "@/components/admin/admin-roster";
 import type { PlayerRowActions } from "@/components/admin/player-row";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -63,21 +62,9 @@ export function AdminView(
         kicker="The commissioner"
         title="Admin"
         actions={
-          <div className="flex items-center gap-1.5">
-            <Button asChild variant="outline" size="xs">
-              <Link href="/">Back to app</Link>
-            </Button>
-            <form action={logoutAction} className="flex">
-              <Button
-                variant="outline"
-                size="xs"
-                type="submit"
-                className="text-muted-foreground"
-              >
-                Log out
-              </Button>
-            </form>
-          </div>
+          <Button asChild variant="outline" size="xs">
+            <Link href="/">Back to app</Link>
+          </Button>
         }
       />
 
@@ -96,28 +83,28 @@ export function AdminView(
         </div>
       </section>
 
-      <section>
-        <h2 className="section-label text-primary">Add a player</h2>
-        <p className="mt-1 mb-2.5 text-sm font-semibold text-muted-foreground">
-          New players start not joined, with no invite until you make one.
-        </p>
-        <CreatePlayerForm createPlayer={props.actions?.createPlayer} />
-      </section>
-
-      <AdminRoster
+      <PlayerManagement
         roster={props.roster}
+        createPlayer={props.actions?.createPlayer}
         actions={props.actions?.playerRow}
         initialSearch={props.initialRosterSearch}
         initialExpandedPlayerId={props.initialExpandedPlayerId}
       />
 
       <section>
-        <h2 className="section-label text-primary">Database backup</h2>
-        <div className="mt-2.5">
+        <h2 className="section-label text-primary">Admin tools</h2>
+        <div className="mt-2.5 space-y-4 border p-3.5">
           <DatabaseBackupControl
             download={props.actions?.downloadBackup}
             initialState={props.initialBackupState}
           />
+          <div className="border-t pt-3">
+            <form action={logoutAction}>
+              <Button variant="outline" type="submit" className="text-muted-foreground">
+                Log out
+              </Button>
+            </form>
+          </div>
         </div>
       </section>
     </main>

@@ -37,6 +37,10 @@ export type LinkResult =
 
 export type FormState = { error?: string };
 
+export type CreatePlayerState = FormState & {
+  createdPlayers?: { id: string; name: string }[];
+};
+
 // ---- Session ---------------------------------------------------------------
 
 export async function loginAction(
@@ -71,18 +75,28 @@ export async function logoutAction(): Promise<void> {
 // ---- Roster ----------------------------------------------------------------
 
 export async function createPlayerAction(
-  _prev: FormState,
+  _prev: CreatePlayerState,
   formData: FormData,
-): Promise<FormState> {
+): Promise<CreatePlayerState> {
   await requireAdmin();
   try {
-    await createPlayer(getDb(), String(formData.get("name") ?? ""));
+    const player = await createPlayer(
+      getDb(),
+      String(formData.get("name") ?? ""),
+    );
+    revalidateAdminViews();
+    return {
+      createdPlayers: [
+        ...(_prev.createdPlayers ?? []),
+        { id: player.id, name: player.name },
+      ],
+    };
   } catch (err) {
-    if (err instanceof PlayerNameError) return { error: err.message };
+    if (err instanceof PlayerNameError) {
+      return { createdPlayers: _prev.createdPlayers, error: err.message };
+    }
     throw err;
   }
-  revalidateAdminViews();
-  return {};
 }
 
 export async function renamePlayerAction(

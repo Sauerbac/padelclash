@@ -3,6 +3,7 @@ import type { DatabaseBackupState } from "@/components/admin/database-backup-con
 import type { AdminRoster, RosterEntry } from "@/services/players";
 import {
   FixtureAdminCreateError,
+  FixtureAdminCreateSuccess,
   FixtureAdminActionFailure,
   FixtureAdminLoginState,
   FixtureAdminView as AdminView,
@@ -113,7 +114,7 @@ const FAILURE_ROSTER: AdminRoster = {
 const DATABASE_BACKUP_CASES: Record<DatabaseBackupState, ScreenCase> = {
   idle: {
     title: "Database backup idle",
-    note: "The final Admin section warns about private data and offers one download action.",
+    note: "The final Admin tools zone warns about private data, offers one download action, and keeps Log out nearby.",
     render: () =>
       inert(
         <AdminView
@@ -366,6 +367,22 @@ export const ADMIN_CASES: Record<string, ScreenCase> = {
         roster={ADMIN_ROSTER}
         generalLink={null}
         now={NOW}
+      />
+    ),
+  },
+  "new-player-created": {
+    title: "Newly created Player",
+    note: "The new Player stays beneath Add a player in a permanently open management panel and is absent from the ordinary roster until the next page visit.",
+    render: () => (
+      <FixtureAdminCreateSuccess
+        state="panel"
+        roster={ADMIN_ROSTER}
+        generalLink={null}
+        now={NOW}
+        player={{
+          id: ADMIN_ENTRY_BY_STATUS["not-joined"].id,
+          name: ADMIN_ENTRY_BY_STATUS["not-joined"].name,
+        }}
       />
     ),
   },

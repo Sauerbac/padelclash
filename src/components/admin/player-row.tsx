@@ -35,26 +35,26 @@ export interface PlayerRowActions {
   getBindingHistory?: typeof getBindingHistoryAction;
 }
 
+type PlayerRowProps = {
+  entry: RosterEntry;
+  onDeleted: (playerId: string) => void;
+  /** Gallery stubs; production uses the imported server actions. */
+  actions?: PlayerRowActions;
+} & (
+  | { collapsible: false; expanded?: never; onToggle?: never }
+  | { collapsible?: true; expanded: boolean; onToggle: () => void }
+);
+
 /**
  * One roster row, with the controls its state earns (spec decision 50):
  * Joined rows manage a live binding, Not Joined rows manage an invitation,
  * Retired rows offer restore. Conditional delete appears wherever the match
  * log doesn't reference the Player.
  */
-export function PlayerRow({
-  entry,
-  expanded,
-  onToggle,
-  onDeleted,
-  actions,
-}: {
-  entry: RosterEntry;
-  expanded: boolean;
-  onToggle: () => void;
-  onDeleted: (playerId: string) => void;
-  /** Gallery stubs; production uses the imported server actions. */
-  actions?: PlayerRowActions;
-}) {
+export function PlayerRow(props: PlayerRowProps) {
+  const { entry, onDeleted, actions } = props;
+  const collapsible = props.collapsible !== false;
+  const expanded = props.collapsible === false ? true : props.expanded;
   const rename = actions?.rename ?? renamePlayerAction;
   const generatePersonalLink =
     actions?.generatePersonalLink ?? generatePersonalLinkAction;
@@ -93,28 +93,34 @@ export function PlayerRow({
 
   return (
     <li className="overflow-hidden border">
-      <Button
-        type="button"
-        variant="ghost"
-        size="default"
-        aria-expanded={expanded}
-        aria-controls={panelId}
-        onClick={onToggle}
-        className="min-h-11 w-full min-w-0 justify-between gap-3 px-3.5 py-2.5 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      >
-        <span className="min-w-0 truncate text-base font-semibold uppercase">
+      {collapsible ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="default"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          onClick={props.onToggle}
+          className="min-h-11 w-full min-w-0 justify-between gap-3 px-3.5 py-2.5 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          <span className="min-w-0 truncate text-base font-semibold uppercase">
+            {entry.name}
+          </span>
+          <ChevronDownIcon
+            aria-hidden
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+          />
+        </Button>
+      ) : (
+        <div className="px-3.5 py-2.5 text-base font-semibold uppercase">
           {entry.name}
-        </span>
-        <ChevronDownIcon
-          aria-hidden
-          className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-        />
-      </Button>
+        </div>
+      )}
 
       <div
         id={panelId}
-        hidden={!expanded}
-        aria-hidden={!expanded}
+        hidden={collapsible && !expanded}
+        aria-hidden={collapsible && !expanded}
         className="border-t px-3.5 pt-3 pb-3.5"
       >
           <form

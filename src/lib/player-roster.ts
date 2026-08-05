@@ -39,6 +39,14 @@ export function removeSelectedPlayers<T extends IdentifiedPlayer>(
   );
 }
 
+/** Remove every listed Player while preserving the remaining roster order. */
+export function removePlayersById<T extends IdentifiedPlayer>(
+  players: T[],
+  playerIds: Set<string>,
+): T[] {
+  return players.filter((player) => !playerIds.has(player.id));
+}
+
 export function toggleExpandedPlayer(
   expandedPlayerId: string | null,
   playerId: string,

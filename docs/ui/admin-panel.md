@@ -9,6 +9,7 @@ states, with an exhaustive `PlayerStatus` fixture map.
 - Route: `/admin` when the admin session is valid
 - Main implementation: `src/app/admin/page.tsx`
 - View and roster controller: `src/components/admin-view.tsx`,
+  `src/components/admin/player-management.tsx`,
   `src/components/admin/admin-roster.tsx`
 - Player management panel: `src/components/admin/player-row.tsx`
 
@@ -23,12 +24,12 @@ downloads.
 
 The page is a single constrained vertical column with:
 
-1. The `Admin` header with `Back to app` and `Log out`.
+1. The `Admin` header with `Back to app`.
 2. General onboarding-link controls.
 3. Add Player form.
 4. A live `Search players…` field.
 5. Joined, Not Joined, and Retired roster groups.
-6. The `Database backup` section.
+6. The final `Admin tools` zone containing database backup and `Log out`.
 
 This is a standalone admin surface and does not show the main bottom tab bar.
 There is no admin dashboard, analytics summary, match-management table, or
@@ -76,6 +77,12 @@ replacement actions retain their confirmation dialogs. After deletion, focus
 returns to the next remaining Player row, the previous row, or the search field
 when the roster is empty.
 
+After Add Player succeeds, that Player stays directly beneath the form in a
+fully open management panel with no collapse control. This keeps the Personal
+Link action immediately available. The Player is excluded from Search and the
+Not Joined group for the remainder of that mounted page; opening Admin again
+clears the transient placement and shows the Player in the ordinary group.
+
 ## Onboarding section
 
 The General Onboarding Link card shows no link, a live countdown with Copy and
@@ -83,12 +90,16 @@ Revoke controls, or an expired state. Generating a link copies it immediately.
 Personal links live on the relevant Not Joined or Joined Player panel and
 remain independent of names.
 
-## Database backup
+## Admin tools
 
-The final section is deliberately separate from roster management. It says
+The final zone is deliberately separate from roster management. Its database
+backup control says
 that the archive contains all private PadelClash data and should be kept on an
 encrypted device, then offers one `Download backup` action. A valid Admin
 session is sufficient; the password is not requested again.
+
+The same zone contains `Log out`, separated from the backup control. The page
+header retains only `Back to app`.
 
 Each click prepares a fresh PostgreSQL custom-format dump. While the server is
 preparing and validating it, the action is disabled and communicates its busy

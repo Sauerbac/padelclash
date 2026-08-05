@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterPlayersByName,
+  removePlayersById,
   removeSelectedPlayers,
   retainExpandedPlayer,
   sortPlayersByName,
@@ -53,5 +54,13 @@ describe("player roster helpers", () => {
         (player) => player.name,
       ),
     ).toEqual(["zoe"]);
+  });
+
+  it("removes every Player kept in a transient management section", () => {
+    expect(
+      removePlayersById(players, new Set(["a1", "z"])).map(
+        (player) => player.id,
+      ),
+    ).toEqual(["a2"]);
   });
 });
