@@ -2,6 +2,7 @@ import { LogMatchView } from "@/components/log-match-view";
 import { NotJoined } from "@/components/not-joined";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
+import { getSharedMatchCounts } from "@/services/matches";
 import { listPlayers } from "@/services/players";
 
 export default async function LogMatchPage() {
@@ -10,7 +11,11 @@ export default async function LogMatchPage() {
   if (!access) return <NotJoined />;
 
   const you = access.player;
-  const allPlayers = await listPlayers(getDb());
+  const db = getDb();
+  const [allPlayers, sharedMatchCounts] = await Promise.all([
+    listPlayers(db),
+    you ? getSharedMatchCounts(db, you.id) : {},
+  ]);
   const roster = allPlayers.filter((player) => player.retiredAt === null);
 
   return (
@@ -18,6 +23,7 @@ export default async function LogMatchPage() {
       roster={roster.map(({ id, name }) => ({ id, name }))}
       reservedPlayerNames={allPlayers.map(({ name }) => name)}
       logger={you ? { id: you.id, name: you.name } : null}
+      sharedMatchCounts={sharedMatchCounts}
     />
   );
 }

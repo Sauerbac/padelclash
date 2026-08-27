@@ -46,6 +46,7 @@ export function SearchableSelect({
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const selected = options.find((option) => option.value === value);
@@ -65,6 +66,39 @@ export function SearchableSelect({
       list.scrollTop + list.clientHeight < list.scrollHeight,
     );
   }, []);
+
+  const revealPicker = useCallback((behavior: ScrollBehavior = "auto") => {
+    const scrollRoot = document.getElementById("scroll-root");
+    const trigger = triggerRef.current;
+    if (!scrollRoot || !trigger) return;
+
+    const rootTop = scrollRoot.getBoundingClientRect().top;
+    const triggerTop = trigger.getBoundingClientRect().top;
+    const nextTop = Math.max(
+      0,
+      scrollRoot.scrollTop + triggerTop - rootTop - 16,
+    );
+    if (Math.abs(nextTop - scrollRoot.scrollTop) < 1) return;
+    scrollRoot.scrollTo({ top: nextTop, behavior });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    let frame = 0;
+    const revealAfterViewportChange = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => revealPicker());
+    };
+    viewport.addEventListener("resize", revealAfterViewportChange);
+    viewport.addEventListener("scroll", revealAfterViewportChange);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", revealAfterViewportChange);
+      viewport.removeEventListener("scroll", revealAfterViewportChange);
+    };
+  }, [open, revealPicker]);
 
   useEffect(() => {
     if (!open) return;
@@ -104,6 +138,7 @@ export function SearchableSelect({
     >
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           type="button"
           variant="secondary"
           role="combobox"
@@ -132,7 +167,7 @@ export function SearchableSelect({
         className="flex max-h-[min(18rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          searchRef.current?.focus();
+          requestAnimationFrame(() => revealPicker("smooth"));
         }}
       >
         <div className="relative shrink-0 border-b">
@@ -144,6 +179,7 @@ export function SearchableSelect({
             ref={searchRef}
             type="search"
             value={query}
+            onFocus={() => revealPicker()}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {

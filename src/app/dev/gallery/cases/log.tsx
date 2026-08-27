@@ -7,6 +7,7 @@ import {
 import type { ScreenCase } from "../screen-cases";
 import {
   CASEY,
+  INGRID,
   inert,
   LONG,
   PAYOFF,
@@ -17,12 +18,30 @@ import {
 
 const VALID_DRAFT: MatchFormDraft = {
   sides: {
-    A: [{ kind: "player", playerId: YOU.id }],
-    B: [{ kind: "player", playerId: CASEY.id }],
+    A: [
+      { kind: "player", playerId: YOU.id },
+      { kind: "guest", name: "Mira" },
+    ],
+    B: [
+      { kind: "player", playerId: CASEY.id },
+      { kind: "player", playerId: LONG.id },
+    ],
   },
   winnerSide: "A",
   sets: null,
 };
+
+const LOG_PAYOFF = [
+  ...PAYOFF,
+  {
+    playerId: LONG.id,
+    name: LONG.name,
+    side: "B" as const,
+    ratingBefore: 1130,
+    delta: -15,
+    ratingAfter: 1115,
+  },
+];
 
 const LONG_NAME_LOGGER = {
   ...YOU,
@@ -68,6 +87,11 @@ export const LOG_CASES: Record<string, ScreenCase> = {
             roster={ROSTER}
             reservedPlayerNames={RESERVED_NAMES}
             logger={YOU}
+            sharedMatchCounts={{
+              [INGRID.id]: 8,
+              [LONG.id]: 5,
+              [CASEY.id]: 2,
+            }}
           />,
         )}
       </TabShell>
@@ -111,9 +135,13 @@ export const LOG_CASES: Record<string, ScreenCase> = {
           roster={ROSTER}
           reservedPlayerNames={RESERVED_NAMES}
           logger={YOU}
+          sharedMatchCounts={{
+            [INGRID.id]: 3,
+            [LONG.id]: 2,
+          }}
           initialDraft={VALID_DRAFT}
           scenario="success"
-          payoff={PAYOFF}
+          payoff={LOG_PAYOFF}
         />
       </TabShell>
     ),
@@ -129,7 +157,7 @@ export const LOG_CASES: Record<string, ScreenCase> = {
           logger={YOU}
           initialDraft={VALID_DRAFT}
           scenario="offline"
-          payoff={PAYOFF}
+          payoff={LOG_PAYOFF}
         />
       </TabShell>
     ),
@@ -145,7 +173,7 @@ export const LOG_CASES: Record<string, ScreenCase> = {
           logger={YOU}
           initialDraft={VALID_DRAFT}
           scenario="refused"
-          payoff={PAYOFF}
+          payoff={LOG_PAYOFF}
         />
       </TabShell>
     ),
@@ -161,7 +189,7 @@ export const LOG_CASES: Record<string, ScreenCase> = {
           logger={YOU}
           initialDraft={VALID_DRAFT}
           scenario="pending"
-          payoff={PAYOFF}
+          payoff={LOG_PAYOFF}
         />
       </TabShell>
     ),

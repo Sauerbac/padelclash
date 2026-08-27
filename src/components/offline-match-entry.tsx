@@ -36,6 +36,7 @@ export function OfflineMatchEntry() {
       roster={snapshot.roster}
       reservedPlayerNames={snapshot.reservedPlayerNames}
       loggerId={snapshot.player.id}
+      sharedMatchCounts={snapshot.sharedMatchCounts}
     />
   );
 }

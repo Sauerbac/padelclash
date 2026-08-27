@@ -4,6 +4,7 @@ import type {
   MatchFormDraft,
 } from "@/components/match-form";
 import { PageHeader } from "@/components/page-header";
+import type { SharedMatchCounts } from "@/lib/player-roster";
 
 interface RosterPlayer {
   id: string;
@@ -14,12 +15,14 @@ export function LogMatchView({
   roster,
   reservedPlayerNames,
   logger,
+  sharedMatchCounts,
   initialDraft,
   actions,
 }: {
   roster: RosterPlayer[];
   reservedPlayerNames: string[];
   logger: RosterPlayer | null;
+  sharedMatchCounts?: SharedMatchCounts;
   initialDraft?: MatchFormDraft;
   actions?: MatchFormActions;
 }) {
@@ -32,6 +35,7 @@ export function LogMatchView({
           roster={roster}
           reservedPlayerNames={reservedPlayerNames}
           loggerId={logger.id}
+          sharedMatchCounts={sharedMatchCounts}
           initialDraft={initialDraft}
           actions={actions}
         />

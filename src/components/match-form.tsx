@@ -21,8 +21,10 @@ import { enqueueMatch } from "@/services/offline/queue";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
 import {
+  addSharedMatchToCounts,
   removeSelectedPlayers,
-  sortPlayersByName,
+  sortPlayersBySharedMatches,
+  type SharedMatchCounts,
 } from "@/lib/player-roster";
 import {
   toMatchParticipantSides,
@@ -36,10 +38,17 @@ interface RosterEntry {
   name: string;
 }
 
+const NO_SHARED_MATCHES: SharedMatchCounts = {};
+
 type Side = "A" | "B";
 type Slot = "a1" | "a2" | "b1" | "b2";
 type DraftParticipant = MatchParticipant | null;
 type Slots = Record<Slot, DraftParticipant>;
+
+interface RepeatLineup {
+  doubles: boolean;
+  slots: Slots;
+}
 
 interface SetRow {
   a: string;
@@ -55,6 +64,20 @@ function toLocalInput(date: Date): string {
 
 function nowLocal(): string {
   return toLocalInput(new Date());
+}
+
+function repeatLineupFromSides(
+  sides: Record<Side, MatchParticipant[]>,
+): RepeatLineup {
+  return {
+    doubles: sides.A.length === 2,
+    slots: {
+      a1: sides.A[0] ?? null,
+      a2: sides.A[1] ?? null,
+      b1: sides.B[0] ?? null,
+      b2: sides.B[1] ?? null,
+    },
+  };
 }
 
 /** An existing match being corrected — switches the form into edit mode. */
@@ -82,6 +105,7 @@ export function MatchForm({
   roster,
   reservedPlayerNames,
   loggerId,
+  sharedMatchCounts = NO_SHARED_MATCHES,
   editing,
   initialDraft,
   actions,
@@ -91,6 +115,8 @@ export function MatchForm({
   reservedPlayerNames: string[];
   /** The bound player, pre-filled as side A's first slot when logging. */
   loggerId?: string;
+  /** Match frequency between the bound viewer and each roster Player. */
+  sharedMatchCounts?: SharedMatchCounts;
   /** When set: pre-fill from this match and save corrections to it. */
   editing?: EditableMatch;
   /** Only the gallery passes this to start a new form with a valid draft. */
@@ -102,7 +128,13 @@ export function MatchForm({
   const editMatch = actions?.editMatch ?? editMatchAction;
   const enqueue = actions?.enqueue ?? enqueueMatch;
   const startingDraft = editing ?? initialDraft;
-  const orderedRoster = useMemo(() => sortPlayersByName(roster), [roster]);
+  const [currentSharedMatchCounts, setCurrentSharedMatchCounts] = useState(
+    () => sharedMatchCounts,
+  );
+  const orderedRoster = useMemo(
+    () => sortPlayersBySharedMatches(roster, currentSharedMatchCounts),
+    [roster, currentSharedMatchCounts],
+  );
   const [doubles, setDoubles] = useState(
     startingDraft ? startingDraft.sides.A.length === 2 : true,
   );
@@ -143,6 +175,7 @@ export function MatchForm({
   const [error, setError] = useState<string | null>(null);
   const [payoff, setPayoff] = useState<PayoffDelta[] | null>(null);
   const [queued, setQueued] = useState(false);
+  const [repeatLineup, setRepeatLineup] = useState<RepeatLineup | null>(null);
   const [pending, startTransition] = useTransition();
 
   // The side→slots mapping, in one place: which slot keys a side uses (and
@@ -284,6 +317,7 @@ export function MatchForm({
           },
           queuedAt: new Date().toISOString(),
         });
+        setRepeatLineup(repeatLineupFromSides(payload.sides));
         setQueued(true);
       };
       if (!editing && !navigator.onLine) return queueLocally();
@@ -291,7 +325,25 @@ export function MatchForm({
         const result = editing
           ? await editMatch(payload)
           : await logMatch({ ...payload, ownerPlayerId: loggerId ?? "" });
-        if (result.ok) setPayoff(result.deltas);
+        if (result.ok) {
+          if (!editing && loggerId) {
+            setCurrentSharedMatchCounts((counts) =>
+              addSharedMatchToCounts(
+                counts,
+                loggerId,
+                Object.values(payload.sides).flatMap((side) =>
+                  side.flatMap((participant) =>
+                    participant.kind === "player"
+                      ? [participant.playerId]
+                      : [],
+                  ),
+                ),
+              ),
+            );
+          }
+          setRepeatLineup(repeatLineupFromSides(payload.sides));
+          setPayoff(result.deltas);
+        }
         else setError(result.error);
       } catch {
         // The action call itself failed — no connection.
@@ -304,13 +356,13 @@ export function MatchForm({
   function reset() {
     setPayoff(null);
     setQueued(false);
-    setDoubles(true);
-    setSlots({
-      a1: loggerId ? { kind: "player", playerId: loggerId } : null,
-      a2: null,
-      b1: null,
-      b2: null,
-    });
+    // Keep the submitted format and lineup for an immediate rematch. Guests
+    // remain new match-scoped entries with the copied name, never identities.
+    if (repeatLineup) {
+      setDoubles(repeatLineup.doubles);
+      setSlots(repeatLineup.slots);
+    }
+    setRepeatLineup(null);
     setWinner(null);
     setRecordSets(false);
     setSets([{ a: "", b: "" }]);

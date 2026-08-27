@@ -128,6 +128,7 @@ async function refreshSnapshot(player: {
     player: { id: string; name: string };
     roster: { id: string; name: string }[];
     reservedPlayerNames: string[];
+    sharedMatchCounts: Record<string, number>;
   };
   if (snapshot.player.id !== player.id) {
     throw new Error("Snapshot identity changed during refresh");
@@ -137,6 +138,7 @@ async function refreshSnapshot(player: {
       snapshot.player,
       snapshot.roster,
       snapshot.reservedPlayerNames,
+      snapshot.sharedMatchCounts,
     ),
   );
 }

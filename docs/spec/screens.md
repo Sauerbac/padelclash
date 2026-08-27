@@ -11,8 +11,12 @@ Three tabs (bottom tab bar, mobile-first — same shell pattern as the old app):
 1. **Feed** (home) — reverse-chronological match cards: sides, result, per-player
    rating deltas. Edit/delete affordances where the viewer has rights.
 2. **Log Match** — singles/doubles toggle, player pickers (logger pre-filled),
-   winner, then either set scores or "just the winner". Payoff moment after
-   submit: rating changes.
+   winner, then either set scores or "just the winner". Picker Players are
+   ordered by how many surviving Matches they share with the bound Player,
+   counting both partnership and opposition, with Player Name breaking ties.
+   Payoff moment after submit: rating changes. `Log another match` carries the
+   submitted format and lineup into a fresh result-less Match; a copied Guest
+   Name remains a new match-scoped Guest entry rather than a persistent identity.
 3. **Leaderboard** — ranked table of active players: rank, name, rating, W–L.
    Players below the ranked threshold (3 competitive matches) listed unranked.
 
@@ -86,3 +90,5 @@ These decisions are normative details and rationale for this topic. When a decis
 | 147 | 2026-08-04 | Small truthful Admin surface | `Database backup` is the final Admin Panel section. It explains that the dump contains all private data, offers one `Download backup` action, disables duplicate attempts while preparing, and presents inline generation failures without exposing process output. It lists no scheduled archives and contains no upload or restore control. Idle, preparing, and failure states are represented in `/dev/gallery` |
 | 150 | 2026-08-05 | Newly created Player handoff | After Add Player succeeds, the new Player remains beneath the form in a permanently open management panel so Admin can immediately issue a Personal Link. That Player is omitted from Search and the normal status groups only while the current Admin page instance remains mounted; the next visit places them in the ordinary roster. `Log out` leaves the header and shares the final `Admin tools` zone with database backup. |
 | 151 | 2026-08-05 | Confirm Admin logout | `Log out` in Admin tools opens a confirmation before ending the Admin session. The dialog warns that the Admin password is required to return; cancelling preserves the session and only the explicit confirm action logs out. |
+| 153 | 2026-08-27 | Frequent-player Match logging | Log and Edit Match participant pickers reverse decision 135's alphabetical-primary order: roster Players sort by the number of surviving Matches shared with the bound Player, counting both partnership and opposition, then alphabetically on equal counts; an Admin editing without a Device Binding falls back to alphabetical order. Filtering and selected-Player removal preserve that order, and Guest remains last. Opening a picker scrolls its trigger into the upper visible application viewport without summoning the keyboard; focusing search re-applies that positioning as the software keyboard changes the visual viewport. After a successful online log or offline queue, `Log another match` preserves singles/doubles and the complete submitted lineup in the same sides and slots, including a copied Guest Name as a new match-scoped Guest entry, while clearing winner, Set Score state, Match id and played-at time. Ordinary entry through the Log tab keeps the doubles-first Logger-only default. |
+| 155 | 2026-08-27 | Immediate repeat ordering | A successful online log advances the open form's shared-Match counts before `Log another match` reopens it, so the new authoritative Match can reorder co-participants without a page reload. The count advances only when the bound Player participated and only once for each roster co-participant, regardless of Side; Guests never receive a relationship count. A locally queued offline Match does not advance ordering until it syncs into the Match log and a later snapshot refresh observes it. |

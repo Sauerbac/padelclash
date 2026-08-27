@@ -20,6 +20,10 @@ This file is one part of the [PadelClash specification](../padelclash-spec.md).
   logger's local feed. Each queued item records its originating Player. It may sync after
   recovery only when the current binding belongs to that same Player; it never syncs
   under a different identity and incompatible queued data requires explicit discard.
+- The minimal offline Match-entry snapshot also stores, for each active roster
+  Player, how many surviving Matches that Player shares with the bound Player.
+  This keeps participant-picker ordering identical during a cold offline launch.
+  It stores no Feed, Rating, match-by-match history, or full Player Detail read model.
 - Reading (feed, leaderboard, stats) requires a connection in v1. No push notifications.
 - Revocation is authoritative at the server immediately but becomes visible to an
   offline device only on its next server contact. At that point the invalid credential
@@ -45,3 +49,4 @@ These decisions are normative details and rationale for this topic. When a decis
 | 82 | 2026-07-22 | Service-worker privacy and updates | Do not blindly pre-cache `/`, because it contains credential-dependent server output. Use an explicit versioned shell/offline strategy, exclude API/Admin/Onboarding surfaces, clear private caches after revocation, and verify that a deployment cannot strand cached HTML with missing Next.js chunks |
 | 83 | 2026-07-22 | Web hardening | The private installation is `noindex`; invitation-bearing pages send no referrer. Hide the framework header and add low-complexity type-sniffing and frame protections; a strict CSP is deferred until it can be tested with Next's generated scripts |
 | 85 | 2026-07-22 | Offline log snapshot | Reliable cold offline logging necessarily persists a minimal private snapshot: the bound Player identity plus the active roster needed by the Match form. It contains no Feed, ratings or Player Detail data, is refreshed after successful online reads, is subject to the same originating-Player sync checks as the queue, and is cleared when revocation is observed |
+| 154 | 2026-08-27 | Offline frequent-player ordering | The minimal private offline Match-entry snapshot extends decision 85 with one integer shared-Match count per active roster Player, computed for the bound Player across both partnership and opposition. This is the smallest durable read needed to preserve the Log Match picker order during a cold offline launch; it adds no Match rows, outcomes, Rating data, Feed, or full Player Detail projection. Older snapshots without counts remain usable with alphabetical ties until the next successful refresh. |

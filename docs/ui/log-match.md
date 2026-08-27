@@ -67,10 +67,13 @@ Each slot is a full-width select control with the placeholder
 already selected in another slot is removed from the other slot’s options,
 preventing a Player from appearing twice or on both sides.
 
-Available Player options are sorted alphabetically using a locale-aware,
-case-insensitive comparison. Removing selected Players or adding a retired
-historical participant for Edit Match does not disturb that order. Guest remains
-the separate final option when the current doubles rules allow it.
+Available Player options are sorted by how many surviving Matches they share
+with the bound Player, counting Matches as both partners and opponents. Equal
+counts, including zero, use a locale-aware, case-insensitive alphabetical
+tiebreak. An Admin editing without a Device Binding therefore sees alphabetical
+order. Filtering, removing selected Players, or adding a retired historical
+participant for Edit Match preserves that order. Guest remains the separate
+final option when the current doubles rules allow it.
 
 Opening a picker puts a Player search field first. The option list has a fixed
 maximum height beneath that field and scrolls locally once the roster exceeds
@@ -78,6 +81,12 @@ it; the search remains visible while the results scroll. The native scrollbar
 is hidden. A shadow appears at each edge only when more results exist in that
 direction, disappearing at the full top or bottom. The popup is bounded to the
 phone viewport and long option labels use an ellipsis.
+
+Opening also scrolls the picker trigger into the upper visible area of the
+application scroller, leaving room for its options without automatically
+focusing search or summoning the software keyboard. When search is focused,
+the picker re-applies that position as the mobile visual viewport changes so
+the keyboard does not leave the option list hidden below it.
 
 In doubles, a slot may instead be changed to `Guest`, which reveals a
 40-character Guest Name input. At most one Guest is available on each Side and
@@ -171,8 +180,18 @@ After a successful new match, replace the form with a result card:
 - One row per roster Player containing the name, exact integer Rating before,
   an arrow, exact integer Rating after, and the signed integer delta. Guests
   receive no Rating output and never appear in the payoff.
-- A `Log another match` action that resets the form to its initial state. The
-  Logger is prefilled again and the played-at value returns to now.
+- A `Log another match` action that starts a fresh Match with the submitted
+  singles/doubles format and every participant retained in the same Side and
+  slot. Guest Names are copied as new match-scoped Guest entries. Winner, Set
+  Score state, Match id, and played-at value are cleared/reset, with played-at
+  returning to now. Entering through the Log tab instead still starts the
+  doubles-first form with only the Logger prefilled.
+
+Before that repeated form opens after a successful online log, its frequency
+ordering advances by the new Match wherever the bound Player participated.
+An offline queued Match does not advance the counts yet because it has not
+entered the authoritative Match log; synchronization and the next snapshot
+refresh incorporate it later.
 
 After a successful edit, use `Match updated` as the title. The payoff list is
 the same, but the primary action is `Back to feed`, which navigates to `/`.
@@ -190,7 +209,8 @@ the server cannot be reached:
 - Explain that the match is safe on the device, will sync automatically when
   online, and will appear as pending sync in the Feed.
 - Provide `Log another match`, which resets the form and permits another local
-  match to be queued.
+  match to be queued with the same format and lineup carry-over used after an
+  online log, including copied match-scoped Guest Names.
 
 If an edit fails while offline, keep the form visible and show
 `You’re offline — edits need a connection.`

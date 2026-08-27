@@ -1,4 +1,5 @@
 import { MATCH_SNAPSHOT_STORE, withOfflineStore } from "./db";
+import type { SharedMatchCounts } from "@/lib/player-roster";
 
 export interface OfflineRosterEntry {
   id: string;
@@ -10,6 +11,8 @@ export interface OfflineMatchSnapshot {
   roster: OfflineRosterEntry[];
   /** All roster names, including Retired Players, reserved against Guests. */
   reservedPlayerNames: string[];
+  /** Bound Player's shared-Match frequency for ordering participant pickers. */
+  sharedMatchCounts: SharedMatchCounts;
   refreshedAt: string;
 }
 
@@ -22,12 +25,14 @@ export function createOfflineMatchSnapshot<
   player: P,
   roster: R[],
   reservedPlayerNames: string[],
+  sharedMatchCounts: SharedMatchCounts = {},
   now = new Date(),
 ): OfflineMatchSnapshot {
   return {
     player: { id: player.id, name: player.name },
     roster: roster.map(({ id, name }) => ({ id, name })),
     reservedPlayerNames: [...reservedPlayerNames],
+    sharedMatchCounts: { ...sharedMatchCounts },
     refreshedAt: now.toISOString(),
   };
 }
@@ -53,6 +58,7 @@ export async function loadOfflineMatchSnapshot(): Promise<OfflineMatchSnapshot |
     // set on the next successful online session check.
     reservedPlayerNames:
       stored.reservedPlayerNames ?? stored.roster.map(({ name }) => name),
+    sharedMatchCounts: stored.sharedMatchCounts ?? {},
   };
 }
 

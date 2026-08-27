@@ -6,6 +6,7 @@ import {
 } from "@/components/match-form";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import type { SharedMatchCounts } from "@/lib/player-roster";
 
 type EditMatchViewProps =
   | { state: "locked" }
@@ -14,6 +15,7 @@ type EditMatchViewProps =
       roster: { id: string; name: string }[];
       reservedPlayerNames: string[];
       editing: EditableMatch;
+      sharedMatchCounts?: SharedMatchCounts;
       actions?: MatchFormActions;
     };
 
@@ -43,6 +45,7 @@ export function EditMatchView(props: EditMatchViewProps) {
           roster={props.roster}
           reservedPlayerNames={props.reservedPlayerNames}
           editing={props.editing}
+          sharedMatchCounts={props.sharedMatchCounts}
           actions={props.actions}
         />
       )}

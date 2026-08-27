@@ -25,6 +25,10 @@ import {
   createMatchLogProjection,
   type MatchLogSnapshot,
 } from "../domain/match-log-projection";
+import {
+  countSharedMatches,
+  type SharedMatchCounts,
+} from "../lib/player-roster";
 export type {
   CompanionRecord,
   FeedMatch,
@@ -387,6 +391,15 @@ export async function getPlayerDetail(db: Db, playerId: string) {
   return createMatchLogProjection(
     await readMatchLogSnapshot(db),
   ).playerDetail(playerId);
+}
+
+/** Shared-Match picker order for one bound Player. */
+export async function getSharedMatchCounts(
+  db: Db,
+  playerId: string,
+): Promise<SharedMatchCounts> {
+  const detail = await getPlayerDetail(db, playerId);
+  return detail ? countSharedMatches(detail.headToHead, detail.partners) : {};
 }
 
 /**

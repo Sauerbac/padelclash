@@ -10,7 +10,7 @@ import { NotJoined } from "@/components/not-joined";
 import { currentActor } from "@/services/auth/actor";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
-import { getMatch } from "@/services/matches";
+import { getMatch, getSharedMatchCounts } from "@/services/matches";
 import { listPlayers } from "@/services/players";
 
 export const metadata = { title: "Edit Match · PadelClash" };
@@ -22,13 +22,15 @@ export default async function EditMatchPage({
 }) {
   const { id } = await params;
   // Gate before the query — see viewerForPrivateRead.
-  if (!(await viewerForPrivateRead())) return <NotJoined />;
+  const access = await viewerForPrivateRead();
+  if (!access) return <NotJoined />;
 
   const db = getDb();
-  const [viewer, allPlayers, found] = await Promise.all([
+  const [viewer, allPlayers, found, sharedMatchCounts] = await Promise.all([
     currentActor(),
     listPlayers(db),
     getMatch(db, id),
+    access.player ? getSharedMatchCounts(db, access.player.id) : {},
   ]);
 
   if (!found) notFound();
@@ -64,6 +66,7 @@ export default async function EditMatchPage({
       state="editable"
       roster={[...options].map(([id, name]) => ({ id, name }))}
       reservedPlayerNames={allPlayers.map(({ name }) => name)}
+      sharedMatchCounts={sharedMatchCounts}
       editing={{
           id: match.id,
           playedAtIso: match.playedAt.toISOString(),
