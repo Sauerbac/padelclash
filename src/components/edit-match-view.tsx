@@ -17,6 +17,7 @@ type EditMatchViewProps =
       editing: EditableMatch;
       sharedMatchCounts?: SharedMatchCounts;
       actions?: MatchFormActions;
+      writeWaitPreview?: "slow" | "uncertain";
     };
 
 export function EditMatchView(props: EditMatchViewProps) {
@@ -47,6 +48,7 @@ export function EditMatchView(props: EditMatchViewProps) {
           editing={props.editing}
           sharedMatchCounts={props.sharedMatchCounts}
           actions={props.actions}
+          writeWaitPreview={props.writeWaitPreview}
         />
       )}
     </main>

@@ -13,6 +13,7 @@ import {
   loadOfflineMatchSnapshot,
   saveOfflineMatchSnapshot,
 } from "./snapshot";
+import { OFFLINE_DB_VERSION } from "./db";
 
 beforeEach(() => {
   Object.defineProperty(globalThis, "indexedDB", {
@@ -149,7 +150,7 @@ describe("offline Match-entry snapshot", () => {
       ),
     );
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("padelclash-offline", 2);
+      const request = indexedDB.open("padelclash-offline", OFFLINE_DB_VERSION);
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });

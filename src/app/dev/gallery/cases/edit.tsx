@@ -94,6 +94,16 @@ export const EDIT_CASES: Record<string, ScreenCase> = {
       </TabShell>
     ),
   },
+  "still-waiting": {
+    title: "Correction still waiting",
+    note: "After five seconds, the form honestly reports the slow server without claiming failure or cancellation.",
+    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><EditMatchView state="editable" roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} editing={EDITING} writeWaitPreview="slow" /></TabShell>,
+  },
+  "check-result": {
+    title: "Correction result uncertain",
+    note: "After fifteen seconds, Check result reloads authoritative state because the server may already have committed.",
+    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><EditMatchView state="editable" roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} editing={EDITING} writeWaitPreview="uncertain" /></TabShell>,
+  },
   "server-error": {
     title: "Correction refused by the server",
     note: "The prefilled form stays visible with its actionable inline error.",

@@ -1,7 +1,0 @@
-- Fix navbar shifting when no section is active (the red band vanishes).
-- Add a shadow above the navbar so content and navigation remain visually separate.
-- Add a Now button beside the Played At date picker.
-- Give feed item time and points separate rows; variable card heights are acceptable.
-- Remove the number beside the last chart point on Player Detail.
-- Remove the Player Detail back button.
-- Add a Top 3 stand to Rankings.

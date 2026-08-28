@@ -12,8 +12,9 @@ import {
   type PullState,
 } from "@/lib/pull-to-refresh";
 import { cn } from "@/lib/utils";
+import { createSlowConnectionClock } from "@/lib/slow-connection";
 
-export type PullIndicatorPhase = Exclude<PullPhase, "idle"> | "refreshing";
+export type PullIndicatorPhase = Exclude<PullPhase, "idle"> | "refreshing" | "poor-connection";
 
 const RESTING_REFRESH_DISTANCE = 64;
 const PULL_REVEAL_START_DISTANCE = 18;
@@ -34,6 +35,7 @@ export function PullToRefresh({
   const sawPendingRef = useRef(false);
   const [pull, setPull] = useState<PullState>(IDLE_PULL_STATE);
   const [refreshCommitted, setRefreshCommitted] = useState(false);
+  const [refreshSlow, setRefreshSlow] = useState(false);
   const [isPending, startTransition] = useTransition();
   const isRefreshing = refreshCommitted || isPending;
 
@@ -53,6 +55,16 @@ export function PullToRefresh({
     setPull(IDLE_PULL_STATE);
     setRefreshCommitted(false);
   }, [isPending, isRefreshing, refreshCommitted]);
+
+  useEffect(() => {
+    if (!isRefreshing) return;
+    const clock = createSlowConnectionClock({ onSlow: () => setRefreshSlow(true) });
+    clock.start();
+    return () => {
+      clock.dispose();
+      setRefreshSlow(false);
+    };
+  }, [isRefreshing]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -123,7 +135,7 @@ export function PullToRefresh({
   const visiblePhase: PullIndicatorPhase | null =
     previewPhase ??
     (isRefreshing
-      ? "refreshing"
+      ? refreshSlow ? "poor-connection" : "refreshing"
       : pull.phase === "idle"
         ? null
         : pull.phase);
@@ -147,7 +159,9 @@ export function PullToRefresh({
   const label =
     visiblePhase === "ready"
       ? "Release to refresh"
-      : visiblePhase === "refreshing"
+      : visiblePhase === "poor-connection"
+        ? "Connection is poor"
+        : visiblePhase === "refreshing"
         ? "Refreshing"
         : visiblePhase === "pulling"
           ? "Pull to refresh"
@@ -208,13 +222,13 @@ export function PullToRefresh({
           <span
             className={cn(
               "col-span-3 col-start-1 row-start-1 flex items-center justify-center gap-2 text-center transition-[opacity,transform] duration-300 ease-out",
-              visiblePhase === "refreshing"
+              visiblePhase === "refreshing" || visiblePhase === "poor-connection"
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",
             )}
           >
-            <LoaderCircle className="size-4 animate-spin" />
-            Refreshing
+            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
+            {visiblePhase === "poor-connection" ? "Connection is poor" : "Refreshing"}
           </span>
         </div>
       </div>

@@ -14,4 +14,14 @@ describe("generated service worker", () => {
     expect(source).toContain("/^\\/admin/");
     expect(source).toContain("/^\\/join\\//");
   });
+
+  it("bounds cold navigation at five seconds and falls back for every snapshot-capable tab", () => {
+    const source = renderServiceWorker("build-abc");
+
+    expect(source).toContain("const NAVIGATION_DEADLINE_MS = 5_000");
+    expect(source).not.toContain("AbortController");
+    expect(source).toContain('pathname === "/leaderboard"');
+    expect(source).toContain("Promise.race([network, deadline])");
+    expect(source).toContain('type: "navigation-ready"');
+  });
 });

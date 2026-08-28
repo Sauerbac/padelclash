@@ -34,6 +34,33 @@ beyond the two projections.
 
 Plus small non-tab surfaces: join/bind landing (`/join/…`), admin login + admin panel.
 
+### Loading and poor-connection states
+
+Feed and Leaderboard change their active-tab feedback immediately and show a
+destination-shaped skeleton while their live projection loads. After five seconds
+without fresh data, the skeleton gives way to the timestamped Saved View when one
+exists, or to a retryable connection state when it does not. A persistent,
+non-blocking line says `Connection is poor` and names the Saved View's refresh time;
+it never says merely `Offline`, because a weak network may still report itself
+online. Fresh data replaces the Saved View automatically. Skeletons and connection
+status are announced accessibly, respect reduced-motion preferences, and never move
+the viewport-fixed tab bar.
+
+Log Match is snapshot-first for a previously joined Player: the form is available
+without waiting for the server, initially marked `Checking for roster updates…` and,
+after five seconds, `Using saved roster from <time>`. A live roster refresh preserves
+the entire draft. Feed and Leaderboard Saved Views remain read-only, and choosing a
+Player from one keeps the source screen visible while explaining that Player Detail
+needs a connection.
+
+Every network-bound write has honest prolonged-pending feedback. New Match logging
+falls back to its idempotent queue after five seconds. Edit and delete show `Still
+waiting for the server…` after five seconds and offer `Check result` after fifteen;
+they do not imply that the server operation was cancelled. These loading, saved,
+missing-fallback, slow-write, and recovery states are named screen states and must be
+added to the corresponding `docs/ui/` inventories and `/dev/gallery` cases in the
+same implementation change.
+
 An installation without a valid Device Binding sees a dedicated **Not Joined** screen
 instead of the tab shell. Feed, Log Match, Leaderboard, Player Detail, and their server
 operations validate the binding. Onboarding routes and Admin login remain reachable;
@@ -92,3 +119,4 @@ These decisions are normative details and rationale for this topic. When a decis
 | 151 | 2026-08-05 | Confirm Admin logout | `Log out` in Admin tools opens a confirmation before ending the Admin session. The dialog warns that the Admin password is required to return; cancelling preserves the session and only the explicit confirm action logs out. |
 | 153 | 2026-08-27 | Frequent-player Match logging | Log and Edit Match participant pickers reverse decision 135's alphabetical-primary order: roster Players sort by the number of surviving Matches shared with the bound Player, counting both partnership and opposition, then alphabetically on equal counts; an Admin editing without a Device Binding falls back to alphabetical order. Filtering and selected-Player removal preserve that order, and Guest remains last. Opening a picker scrolls its trigger into the upper visible application viewport without summoning the keyboard; focusing search re-applies that positioning as the software keyboard changes the visual viewport. After a successful online log or offline queue, `Log another match` preserves singles/doubles and the complete submitted lineup in the same sides and slots, including a copied Guest Name as a new match-scoped Guest entry, while clearing winner, Set Score state, Match id and played-at time. Ordinary entry through the Log tab keeps the doubles-first Logger-only default. |
 | 155 | 2026-08-27 | Immediate repeat ordering | A successful online log advances the open form's shared-Match counts before `Log another match` reopens it, so the new authoritative Match can reorder co-participants without a page reload. The count advances only when the bound Player participated and only once for each roster co-participant, regardless of Side; Guests never receive a relationship count. A locally queued offline Match does not advance ordering until it syncs into the Match log and a later snapshot refresh observes it. |
+| 157 | 2026-08-27 | Honest loading and preserved drafts | Feed and Rankings show destination skeletons immediately, then after five seconds reveal either their timestamped Saved View or a retryable poor-connection state while fresh data remains eligible to replace it. The tab bar stays fixed and responsive; late results from abandoned navigation attempts cannot steal the screen. Log Match opens immediately from the private Match-entry snapshot for a previously joined Player and refreshes its roster in place without resetting participant selections, winner, scores, or played-at time. Every prolonged write reports uncertainty: creation queues safely, while edit and delete remain pending and offer an authoritative result check rather than claiming that a late response means failure or cancellation. Every new state joins its screen document and gallery fixture together under decisions 126–128. |

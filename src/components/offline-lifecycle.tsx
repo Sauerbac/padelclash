@@ -23,8 +23,11 @@ import type { QueuedMatch } from "@/services/offline/queue-contract";
 import {
   clearOfflineMatchSnapshot,
   createOfflineMatchSnapshot,
+  loadOfflineMatchSnapshot,
   saveOfflineMatchSnapshot,
 } from "@/services/offline/snapshot";
+import { clearSavedViews } from "@/services/offline/saved-views";
+import { fetchWithDeadline } from "@/lib/fetch-deadline";
 
 const CLEANUP_OWED_KEY = "pc_cleanup_owed";
 let owedInMemory = false;
@@ -70,6 +73,9 @@ export function OfflineLifecycle() {
       dropPrivateCaches: dropPrivatePageCaches,
       markQueueUnbound,
       clearSnapshot: clearOfflineMatchSnapshot,
+      clearSavedViews,
+      snapshotPlayerId: async () =>
+        (await loadOfflineMatchSnapshot())?.player.id ?? null,
       refreshSnapshot,
       listQueuedMatches,
       submitMatch: async (match) => logMatchAction(toPayload(match)),
@@ -107,7 +113,7 @@ export function OfflineLifecycle() {
 }
 
 async function contactSession(): Promise<SessionStatus> {
-  const response = await fetch("/api/session", {
+  const response = await fetchWithDeadline("/api/session", {
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -119,7 +125,7 @@ async function refreshSnapshot(player: {
   id: string;
   name: string;
 }): Promise<void> {
-  const response = await fetch("/api/offline-snapshot", {
+  const response = await fetchWithDeadline("/api/offline-snapshot", {
     cache: "no-store",
     credentials: "same-origin",
   });

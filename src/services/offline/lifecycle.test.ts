@@ -22,6 +22,8 @@ function dependencies(
     dropPrivateCaches: vi.fn().mockResolvedValue(true),
     markQueueUnbound: vi.fn().mockResolvedValue(undefined),
     clearSnapshot: vi.fn().mockResolvedValue(undefined),
+    clearSavedViews: vi.fn().mockResolvedValue(undefined),
+    snapshotPlayerId: vi.fn().mockResolvedValue("player-1"),
     refreshSnapshot: vi.fn().mockResolvedValue(undefined),
     listQueuedMatches: vi.fn().mockResolvedValue([]),
     submitMatch: vi.fn(),
@@ -103,6 +105,7 @@ describe("offline lifecycle", () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
     const listQueuedMatches = vi.fn();
+    const clearSavedViews = vi.fn().mockResolvedValue(undefined);
     const contactSession = vi
       .fn()
       .mockResolvedValueOnce({ bound: false, player: null, revoked: true })
@@ -112,6 +115,7 @@ describe("offline lifecycle", () => {
         contactSession,
         cleanupLatch,
         dropPrivateCaches,
+        clearSavedViews,
         listQueuedMatches,
       }),
     );
@@ -120,6 +124,7 @@ describe("offline lifecycle", () => {
     expect(cleanupLatch.set).toHaveBeenCalledBefore(dropPrivateCaches);
     expect(owed).toBe(true);
     expect(listQueuedMatches).not.toHaveBeenCalled();
+    expect(clearSavedViews).toHaveBeenCalledOnce();
 
     await lifecycle.trigger();
     expect(dropPrivateCaches).toHaveBeenCalledTimes(2);
@@ -166,6 +171,35 @@ describe("offline lifecycle", () => {
     });
     expect(submitMatch).toHaveBeenCalledWith(match);
     expect(removeQueuedMatch).toHaveBeenCalledWith(match.id);
+  });
+
+  it("clears private projections before refreshing an observed different binding", async () => {
+    let owed = false;
+    const clearSavedViews = vi.fn().mockResolvedValue(undefined);
+    const clearSnapshot = vi.fn().mockResolvedValue(undefined);
+    const refreshSnapshot = vi.fn().mockResolvedValue(undefined);
+    const lifecycle = createOfflineLifecycle(dependencies({
+      contactSession: vi.fn().mockResolvedValue({
+        bound: true,
+        player: { id: "player-2", name: "Blair" },
+        revoked: false,
+      }),
+      snapshotPlayerId: vi.fn().mockResolvedValue("player-1"),
+      cleanupLatch: {
+        set: vi.fn(() => { owed = true; }),
+        pending: vi.fn(() => owed),
+        clear: vi.fn(() => { owed = false; }),
+      },
+      clearSavedViews,
+      clearSnapshot,
+      refreshSnapshot,
+    }));
+
+    await lifecycle.trigger();
+
+    expect(clearSavedViews).toHaveBeenCalledBefore(refreshSnapshot);
+    expect(clearSnapshot).toHaveBeenCalledBefore(refreshSnapshot);
+    expect(refreshSnapshot).toHaveBeenCalledWith({ id: "player-2", name: "Blair" });
   });
 
   it("preserves ownership when a different Player receives identity-mismatch", async () => {

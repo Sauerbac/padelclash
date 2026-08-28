@@ -51,6 +51,18 @@ rotates both arrows while the pull/release copy cross-fades over the same
 interval. Refreshing replaces them with one centered spinner-and-label group.
 A successful release settles into the loading offset before the content eases
 back to normal. The bottom tab bar remains fixed throughout.
+After five seconds the old Feed remains visible and the indicator changes to
+`Connection is poor`; a late fresh response still replaces it.
+
+## Loading, Saved View, and recovery
+
+Selecting Feed immediately activates the tab and shows a Feed-shaped skeleton.
+After five seconds without fresh data, a joined Player sees the last successful
+Feed Saved View with its exact refresh time, or a retryable connection state
+when none exists. Saved cards expose no edit/delete action, and selecting a
+Player explains that Player Detail needs a connection while preserving Feed.
+Fresh data replaces the Saved View atomically and restores current permissions.
+Admin-without-binding never creates or consumes this Player-scoped fallback.
 
 ## Device identity states
 

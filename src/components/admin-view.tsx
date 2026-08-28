@@ -23,6 +23,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { LinkDetails } from "@/services/onboarding";
 import type { AdminRoster as AdminRosterData } from "@/services/players";
+import { RememberViewerScope } from "@/components/remember-saved-view";
 
 export interface AdminViewActions {
   login?: AdminLoginAction;
@@ -43,6 +44,8 @@ type AdminViewProps =
       initialRosterSearch?: string;
       initialExpandedPlayerId?: string | null;
       initialBackupState?: DatabaseBackupState;
+      /** Production loader supplies this; gallery fixtures omit device state. */
+      viewerBindingPlayerId?: string | null;
     };
 
 export function AdminView(
@@ -59,6 +62,9 @@ export function AdminView(
   const logoutAction = props.actions?.logout ?? realLogoutAction;
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
+      {props.viewerBindingPlayerId !== undefined && (
+        <RememberViewerScope bindingPlayerId={props.viewerBindingPlayerId} />
+      )}
       <PageHeader
         kicker="The commissioner"
         title="Admin"

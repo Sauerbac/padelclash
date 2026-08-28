@@ -40,6 +40,16 @@ rotates both arrows while the pull/release copy cross-fades over the same
 interval. Refreshing replaces them with one centered spinner-and-label group.
 A successful release settles into the loading offset before the content eases
 back to normal. The bottom tab bar remains fixed throughout.
+After five seconds the existing standings remain visible with `Connection is
+poor`; a late response still replaces them.
+
+## Loading, Saved View, and recovery
+
+Selecting Rankings immediately shows a destination-shaped skeleton. At five
+seconds it gives way to the binding-scoped Saved View and exact refresh time,
+or a retryable no-saved-data state. Saved Player links retain Rankings and
+explain that Player Detail requires a connection. A fresh projection replaces
+the fallback atomically. Unbound Admin sessions use only live data.
 
 The table is not wrapped in a per-row card. It is a compact, horizontally
 scrollable table container, so the redesign must keep all four data fields

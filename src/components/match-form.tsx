@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   editMatchAction,
   logMatchAction,
@@ -18,6 +18,9 @@ import { Switch } from "@/components/ui/switch";
 import { RatingPayoff } from "@/components/rating-payoff";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { enqueueMatch } from "@/services/offline/queue";
+import { removeQueuedMatch } from "@/services/offline/queue";
+import { submitResilientCreate } from "@/services/offline/resilient-create";
+import { useProlongedWrite } from "@/lib/use-prolonged-write";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
 import {
@@ -32,6 +35,11 @@ import {
 } from "@/domain/match-intake";
 import type { MatchParticipant } from "@/domain/match-participant";
 import type { SetScore } from "@/domain/set-score";
+import { reconcileDraftRoster } from "@/lib/draft-roster";
+import {
+  useLogDraftContinuity,
+  type MatchDraftSlots,
+} from "@/components/log-draft-continuity";
 
 interface RosterEntry {
   id: string;
@@ -43,7 +51,7 @@ const NO_SHARED_MATCHES: SharedMatchCounts = {};
 type Side = "A" | "B";
 type Slot = "a1" | "a2" | "b1" | "b2";
 type DraftParticipant = MatchParticipant | null;
-type Slots = Record<Slot, DraftParticipant>;
+type Slots = MatchDraftSlots;
 
 interface RepeatLineup {
   doubles: boolean;
@@ -109,6 +117,8 @@ export function MatchForm({
   editing,
   initialDraft,
   actions,
+  draftContinuity,
+  writeWaitPreview,
 }: {
   roster: RosterEntry[];
   /** Full roster, including Retired Players whose names Guests may not use. */
@@ -123,24 +133,32 @@ export function MatchForm({
   initialDraft?: MatchFormDraft;
   /** Gallery stubs; production uses the imported server actions. */
   actions?: MatchFormActions;
+  /** Snapshot writes continuity; the one fresh replacement consumes it. */
+  draftContinuity?: "snapshot" | "fresh";
+  /** Gallery-only prolonged edit state. */
+  writeWaitPreview?: "slow" | "uncertain";
 }) {
   const logMatch = actions?.logMatch ?? logMatchAction;
   const editMatch = actions?.editMatch ?? editMatchAction;
   const enqueue = actions?.enqueue ?? enqueueMatch;
+  const {
+    draft: continuityDraft,
+    save: saveContinuityDraft,
+    clear: clearContinuityDraft,
+  } = useLogDraftContinuity();
   const startingDraft = editing ?? initialDraft;
+  const [restoredDraft] = useState(() =>
+    !editing && draftContinuity === "fresh" ? continuityDraft : null,
+  );
   const [currentSharedMatchCounts, setCurrentSharedMatchCounts] = useState(
     () => sharedMatchCounts,
   );
-  const orderedRoster = useMemo(
-    () => sortPlayersBySharedMatches(roster, currentSharedMatchCounts),
-    [roster, currentSharedMatchCounts],
-  );
   const [doubles, setDoubles] = useState(
-    startingDraft ? startingDraft.sides.A.length === 2 : true,
+    restoredDraft?.doubles ?? (startingDraft ? startingDraft.sides.A.length === 2 : true),
   );
   // The Logger pre-fills the first slot of side A (spec "Screens").
   const [slots, setSlots] = useState<Slots>(() =>
-    startingDraft
+    restoredDraft?.slots ?? (startingDraft
       ? {
           a1: startingDraft.sides.A[0] ?? null,
           a2: startingDraft.sides.A[1] ?? null,
@@ -152,31 +170,66 @@ export function MatchForm({
           a2: null,
           b1: null,
           b2: null,
-        },
+        }),
   );
   const [winner, setWinner] = useState<Side | null>(
-    startingDraft ? startingDraft.winnerSide : null,
+    restoredDraft?.winner ?? (startingDraft ? startingDraft.winnerSide : null),
   );
   const [recordSets, setRecordSets] = useState(
-    Boolean(startingDraft?.sets?.length),
+    restoredDraft?.recordSets ?? Boolean(startingDraft?.sets?.length),
   );
   const [sets, setSets] = useState<SetRow[]>(() =>
-    startingDraft?.sets?.length
+    restoredDraft?.sets ?? (startingDraft?.sets?.length
       ? startingDraft.sets.map((s) => ({ a: String(s.a), b: String(s.b) }))
-      : [{ a: "", b: "" }],
+      : [{ a: "", b: "" }]),
   );
   // Defaults to "now" (spec "Match"). The server render can't know the
   // device's local time; hydration replaces it with the client's value and
   // the input carries suppressHydrationWarning for the transient mismatch.
   const [playedAt, setPlayedAt] = useState(() =>
-    editing ? toLocalInput(new Date(editing.playedAtIso)) : nowLocal(),
+    restoredDraft?.playedAt ?? (editing ? toLocalInput(new Date(editing.playedAtIso)) : nowLocal()),
+  );
+
+  const rosterWithRetainedSelections = useMemo(() => {
+    return reconcileDraftRoster(
+      roster,
+      Object.values(slots).flatMap((participant) =>
+        participant?.kind === "player" ? [participant.playerId] : [],
+      ),
+      restoredDraft?.namesByPlayerId ?? {},
+    ).entries;
+  }, [restoredDraft, roster, slots]);
+  const orderedRoster = useMemo(
+    () => sortPlayersBySharedMatches(rosterWithRetainedSelections, currentSharedMatchCounts),
+    [rosterWithRetainedSelections, currentSharedMatchCounts],
   );
 
   const [error, setError] = useState<string | null>(null);
   const [payoff, setPayoff] = useState<PayoffDelta[] | null>(null);
   const [queued, setQueued] = useState(false);
   const [repeatLineup, setRepeatLineup] = useState<RepeatLineup | null>(null);
+  const { writeWait, begin: beginWriteWait, finish: finishWriteWait } = useProlongedWrite();
   const [pending, startTransition] = useTransition();
+  const visibleWriteWait = writeWaitPreview ?? writeWait;
+
+  useEffect(() => {
+    if (draftContinuity !== "snapshot" || editing || payoff || queued) return;
+    saveContinuityDraft({
+      doubles,
+      slots,
+      winner,
+      recordSets,
+      sets,
+      playedAt,
+      namesByPlayerId: Object.fromEntries(
+        rosterWithRetainedSelections.map((player) => [player.id, player.name]),
+      ),
+    });
+  }, [doubles, draftContinuity, editing, payoff, playedAt, queued, recordSets, rosterWithRetainedSelections, saveContinuityDraft, sets, slots, winner]);
+
+  useEffect(() => {
+    if (draftContinuity === "fresh") clearContinuityDraft();
+  }, [clearContinuityDraft, draftContinuity]);
 
   // The side→slots mapping, in one place: which slot keys a side uses (and
   // how many of them are live under the current singles/doubles setting).
@@ -195,7 +248,7 @@ export function MatchForm({
     if (!participant) return null;
     return participant.kind === "guest"
       ? participant.name.trim() || "Guest"
-      : roster.find((player) => player.id === participant.playerId)?.name ??
+      : rosterWithRetainedSelections.find((player) => player.id === participant.playerId)?.name ??
           "Unknown";
   };
 
@@ -284,6 +337,7 @@ export function MatchForm({
     );
     if (!validation.ok) return setError(validation.error.message);
     setError(null);
+    finishWriteWait();
 
     startTransition(async () => {
       const payload = {
@@ -297,7 +351,7 @@ export function MatchForm({
       // server is queued locally and synced later. Edits stay online-only.
       // The queued item records who logged it, so a device later rebound to
       // another player can't sync it under that identity (decision 52).
-      const queueLocally = async () => {
+      const enqueueLocally = async () => {
         await enqueue({
           ...payload,
           ownerPlayerId: loggerId ?? "",
@@ -317,16 +371,25 @@ export function MatchForm({
           },
           queuedAt: new Date().toISOString(),
         });
+      };
+      const showQueued = () => {
         setRepeatLineup(repeatLineupFromSides(payload.sides));
+        clearContinuityDraft();
         setQueued(true);
       };
-      if (!editing && !navigator.onLine) return queueLocally();
-      try {
-        const result = editing
-          ? await editMatch(payload)
-          : await logMatch({ ...payload, ownerPlayerId: loggerId ?? "" });
+      if (!editing) {
+        const outcome = await submitResilientCreate({
+          id: payload.id,
+          definitelyOffline: navigator.onLine === false,
+          submit: () => logMatch({ ...payload, ownerPlayerId: loggerId ?? "" }),
+          enqueue: enqueueLocally,
+          removeQueued: removeQueuedMatch,
+          onQueued: showQueued,
+        });
+        if (outcome.kind === "queued") return;
+        const result = outcome.result;
         if (result.ok) {
-          if (!editing && loggerId) {
+          if (loggerId) {
             setCurrentSharedMatchCounts((counts) =>
               addSharedMatchToCounts(
                 counts,
@@ -342,13 +405,24 @@ export function MatchForm({
             );
           }
           setRepeatLineup(repeatLineupFromSides(payload.sides));
+          clearContinuityDraft();
+          setQueued(false);
           setPayoff(result.deltas);
-        }
-        else setError(result.error);
+        } else setError(result.error);
+        return;
+      }
+
+      beginWriteWait();
+      try {
+        const result = await editMatch(payload);
+        finishWriteWait();
+        if (result.ok) {
+          setRepeatLineup(repeatLineupFromSides(payload.sides));
+          setPayoff(result.deltas);
+        } else setError(result.error);
       } catch {
-        // The action call itself failed — no connection.
-        if (editing) setError("You're offline — edits need a connection.");
-        else await queueLocally();
+        finishWriteWait();
+        setError("You're offline — edits need a connection.");
       }
     });
   }
@@ -652,6 +726,19 @@ export function MatchForm({
       </div>
 
       {error && <Alert variant="destructive">{error}</Alert>}
+
+      {editing && visibleWriteWait !== "normal" && (
+        <div role="status" aria-live="polite" className="space-y-2">
+          <p className="font-semibold text-muted-foreground">
+            Still waiting for the server…
+          </p>
+          {visibleWriteWait === "uncertain" && (
+            <Button type="button" variant="outline" className="w-full" onClick={() => window.location.reload()}>
+              Check result
+            </Button>
+          )}
+        </div>
+      )}
 
       <Button
         data-match-submit

@@ -87,9 +87,12 @@ Conventions:
   Logger for newly logged Matches and marks that Player as “You”.
 - A lost binding cookie requires Admin-assisted onboarding again; credentials
   and recovery markers are never stored in localStorage.
-- The app has a service worker for the app shell and an offline write queue.
-  Reading the feed, leaderboard, and player statistics still requires the
-  server in v1.
+- The app has a service worker for the app shell and an offline Match queue.
+  Feed and Rankings retain binding-scoped, timestamped read-only Saved Views
+  for up to 30 days; Player Detail and other reads still require the server.
+  Destination skeletons and the fixed tab bar appear immediately, and the
+  cold-start shell falls back within five seconds without changing the intended
+  route into Log Match.
 
 ## Domain rules that affect UI
 

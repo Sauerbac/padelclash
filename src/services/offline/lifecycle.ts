@@ -29,6 +29,8 @@ export interface OfflineLifecycleDependencies {
   dropPrivateCaches(): Promise<boolean>;
   markQueueUnbound(): Promise<void>;
   clearSnapshot(): Promise<void>;
+  clearSavedViews(): Promise<void>;
+  snapshotPlayerId(): Promise<string | null>;
   refreshSnapshot(player: { id: string; name: string }): Promise<void>;
   listQueuedMatches(): Promise<QueuedMatchRecord[]>;
   submitMatch(match: QueuedMatch): Promise<QueueSubmissionResult>;
@@ -69,18 +71,26 @@ export function createOfflineLifecycle(
 
     const status = await dependencies.contactSession();
     if (status.revoked) dependencies.cleanupLatch.set();
+    if (status.player) {
+      const snapshotPlayerId = await dependencies.snapshotPlayerId();
+      if (snapshotPlayerId && snapshotPlayerId !== status.player.id) {
+        dependencies.cleanupLatch.set();
+      }
+    }
 
     if (dependencies.cleanupLatch.pending()) {
-      const [caches, queue, snapshot] = await Promise.allSettled([
+      const [caches, queue, snapshot, savedViews] = await Promise.allSettled([
         dependencies.dropPrivateCaches(),
         dependencies.markQueueUnbound(),
         dependencies.clearSnapshot(),
+        dependencies.clearSavedViews(),
       ]);
       if (
         caches.status === "fulfilled" &&
         caches.value &&
         queue.status === "fulfilled" &&
-        snapshot.status === "fulfilled"
+        snapshot.status === "fulfilled" &&
+        savedViews.status === "fulfilled"
       ) {
         dependencies.cleanupLatch.clear();
       }

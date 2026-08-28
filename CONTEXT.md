@@ -67,3 +67,7 @@ _Avoid_: Verified Player, veteran
 **Rank**:
 A unique position among active Established Players, ordered by Rating, wins, total competitive Matches, and then roster creation time. Higher values lead for the first three measures; earlier creation wins the final domain tie.
 _Avoid_: Row number, shared placement
+
+**Saved View**:
+A timestamped, read-only copy of the last successfully received Feed or Leaderboard. A Saved View may be shown when the live service cannot answer promptly, but it is never presented as current or authoritative.
+_Avoid_: Live data, offline truth, cached page

@@ -8,6 +8,8 @@ import {
 } from "@/components/pull-to-refresh";
 import { QueuedMatches } from "@/components/queued-matches";
 import type { FeedMatch } from "@/services/matches";
+import { ConnectionStatus } from "@/components/connection-status";
+import { PlayerNavigationProvider } from "@/components/player-navigation-context";
 
 /**
  * The Feed screen, rendered from props alone (decision 127). `FeedPage` keeps
@@ -32,6 +34,7 @@ export function FeedView({
    */
   queued = <QueuedMatches />,
   pullToRefreshPhase,
+  savedAt,
 }: {
   /** The Player bound to this device, or null for an Admin browsing unbound. */
   you: { id: string; name: string } | null;
@@ -41,10 +44,13 @@ export function FeedView({
   queued?: React.ReactNode;
   /** Fixture-only phase pin; production leaves the gesture interactive. */
   pullToRefreshPhase?: PullIndicatorPhase;
+  /** Read-only projection fallback; fresh production views leave this unset. */
+  savedAt?: Date;
 }) {
   const viewer = { playerId: you?.id ?? null, isAdmin };
 
   return (
+    <PlayerNavigationProvider needsConnection={Boolean(savedAt)}>
     <PullToRefresh previewPhase={pullToRefreshPhase}>
       <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
         <PageHeader
@@ -62,6 +68,8 @@ export function FeedView({
             />
           }
         />
+
+        {savedAt && <ConnectionStatus refreshedAt={savedAt} showRetry />}
 
         {you ? (
           <p className="text-[15px] font-semibold text-muted-foreground">
@@ -89,7 +97,7 @@ export function FeedView({
               <MatchCard
                 key={match.id}
                 match={match}
-                canModify={canModifyMatch(match, viewer, now)}
+                canModify={!savedAt && canModifyMatch(match, viewer, now)}
                 showLogger={isAdmin}
               />
             ))}
@@ -97,5 +105,6 @@ export function FeedView({
         )}
       </main>
     </PullToRefresh>
+    </PlayerNavigationProvider>
   );
 }

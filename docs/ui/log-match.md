@@ -36,6 +36,16 @@ outer card. Its order is:
 7. Inline validation error, when present.
 8. Full-width submit button.
 
+## Snapshot-first roster states
+
+A previously joined Player receives the complete form from the Match-entry
+snapshot immediately. It begins with `Checking for roster updates…`; after five
+seconds it changes to `Using saved roster from <time>`. Fresh roster choices
+replace snapshot choices without resetting any draft field. Renames follow the
+stable Player ID. A missing or Retired selected Player remains visible but is
+invalid until replaced. Without a snapshot, the device must first open the app
+successfully while joined and online.
+
 ## Unbound state
 
 If the device is not bound, do not render the form. Show a card titled
@@ -200,8 +210,8 @@ the same, but the primary action is `Back to feed`, which navigates to `/`.
 
 Only creating a new match can be queued offline. Editing requires a connection.
 
-When the create action is attempted while offline, or the action fails because
-the server cannot be reached:
+When the create action is attempted while definitely offline, the action fails
+because the server cannot be reached, or five seconds pass without a response:
 
 - Store the full match payload locally, including player names for rendering.
 - Replace the form with a card titled `Match queued` and subtitle
@@ -214,3 +224,7 @@ the server cannot be reached:
 
 If an edit fails while offline, keep the form visible and show
 `You’re offline — edits need a connection.`
+
+The queued retry and original request share one client Match ID. A late original
+success removes the queued copy before showing its payoff, so the Feed and Match
+log never gain a duplicate.

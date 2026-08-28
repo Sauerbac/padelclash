@@ -77,6 +77,21 @@ const LONG_NAME_DRAFT: MatchFormDraft = {
 };
 
 export const LOG_CASES: Record<string, ScreenCase> = {
+  "roster-checking": {
+    title: "Snapshot form while checking roster",
+    note: "A previously joined Player can use the complete form immediately while current roster data loads in the background.",
+    render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} rosterStatus={{ kind: "checking" }} />)}</TabShell>,
+  },
+  "saved-roster": {
+    title: "Stale roster after five seconds",
+    note: "The form remains usable and identifies the exact snapshot refresh time instead of calling the device online or offline.",
+    render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} rosterStatus={{ kind: "saved", refreshedAt: new Date("2026-08-27T18:45:00Z") }} />)}</TabShell>,
+  },
+  recovery: {
+    title: "Fresh roster recovered with draft intact",
+    note: "Current Player names and choices replace snapshot data without resetting the in-progress lineup, result, scores, or played-at value.",
+    render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={VALID_DRAFT} />)}</TabShell>,
+  },
   bound: {
     title: "Joined Player",
     note: "Doubles starts selected on the left; the Logger is preselected and Guests, set scores and Now remain reachable.",
@@ -147,8 +162,8 @@ export const LOG_CASES: Record<string, ScreenCase> = {
     ),
   },
   queued: {
-    title: "Successful offline queue",
-    note: "The device-safe queued confirmation replaces the form until another Match is started.",
+    title: "Offline or five-second automatic queue",
+    note: "The device-safe queued confirmation replaces the form after a definite offline signal or five seconds without a server response.",
     render: () => (
       <TabShell pathname="/log">
         <FixtureLogActionState

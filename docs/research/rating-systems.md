@@ -3,7 +3,7 @@
 Research date: 2026-07-23
 
 Status: research complete. The adopted design is authoritative in
-[`docs/padelclash-lite-spec.md`](../padelclash-lite-spec.md#rating-engine) and
+[`docs/spec/rating.md`](../spec/rating.md#rating-engine) and
 [ADR 0003](../adr/0003-use-independent-player-elo-for-team-matches.md). The
 recommendations below are research inputs, not unresolved product decisions.
 
@@ -332,6 +332,62 @@ small Elo-family model and decide these branches explicitly:
    unless prediction quality later becomes the primary product goal.
 7. Consider a separate streak/upset/season-points layer if the skill Rating is
    still not playful enough after the transparent Elo changes.
+
+## Follow-up: should partner strength affect an individual update?
+
+Research date: 2026-08-05
+
+Status: researched future alternative, not adopted. PadelClash retains the
+independent Player expectation documented in ADR 0003.
+
+This follow-up asks a narrower question: when a Player wins with a much weaker
+partner, do established systems treat that as harder than winning with an equal
+partner, and do the two partners receive equal changes?
+
+| System | How partner strength enters the result model | Teammate updates | Public detail |
+| --- | --- | --- | --- |
+| Age of Empires II team Elo | It does **not** enter an individual's expectation. Each Player is compared with the opposing team's average. In the official `2000 + 1000` versus `1500 + 1500` example, the winners get `+2` and `+30`. | Asymmetric by individual Rating. | Exact rule and example are public. ([World's Edge](https://www.ageofempires.com/news/updates-to-ranked-team-game-elo-calculation/)) |
+| TrueSkill | Team skill is the **sum** of its members' skills, so a weaker partner makes the team win less expected. For equal-size doubles this is equivalent to equal, `50/50`, weighting when comparing team means. | Individual mean updates are weighted roughly in proportion to each Player's uncertainty. Equal-uncertainty partners therefore do not get a lower-Rating bonus merely because their means differ. | Model and update equations are public. ([Microsoft TrueSkill overview and FAQ](https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/), [paper](https://www.microsoft.com/en-us/research/publication/trueskilltm-a-bayesian-skill-rating-system/)) |
+| UTR doubles | It compares the **average** Rating of each doubles team, so a weaker partner lowers the shared team expectation. | Equal: both teammates move by the same amount. | Team aggregation and update symmetry are public; the full numeric formula is not. ([UTR doubles FAQ](https://support.universaltennis.com/en/support/solutions/articles/9000183289-faq-doubles-algorithm)) |
+| DUPR doubles | It averages the partners' individual Ratings into a team Rating and uses the two team Ratings to predict the score. A weaker partner therefore lowers the shared expectation. | Can be asymmetric: each Player's adjustment also depends on their own match volume and the recency of those matches. The public explanation does not promise an own-Rating-based asymmetry. | Inputs and team average are public; coefficients and full formula are not. ([DUPR methodology](https://www.dupr.com/how-it-works)) |
+| USTA Dynamic NTRP | The expected score uses the Player's Rating, partner Rating, opponents' Ratings, and score, so partner strength matters. | Equal: USTA says the effect of the outcome is applied equally to both partners. | Inputs and equal-update policy are public; the formula is not. ([USTA NTRP FAQ](https://www.usta.com/en/home/play/adult-tennis/programs/national/usta-ntrp-ratings-faqs.html)) |
+| Playtomic | It calculates each team's **average** level, while considering every Player's level and reliability. Its newer overview also lists partner level explicitly. A weaker partner therefore lowers the expected team strength. | Can be asymmetric because Players have different reliability and current levels. | Team aggregation and inputs are public; the formula and weights are not. ([Playtomic algorithm explanation](https://playerhelp.playtomic.com/hc/es/articles/19831827459345-Subidas-y-bajadas-de-nivel-c%C3%B3mo-funciona-el-algoritmo-de-Playtomic), [level overview](https://playerhelp.playtomic.com/hc/en-gb/articles/43310980754193-How-the-Playtomic-level-system-works)) |
+| World Padel Rating | Its expected result uses the Rating and confidence of **each Player on court**, so partner strength is included. | Not specified publicly. | Inputs are public; the detailed formula is proprietary. ([WPR FAQ](https://worldpadelrating.com/faq/)) |
+| Glicko / Glicko-2 | The official specification models head-to-head competitors and does not define how to construct or split a doubles team Rating. A team adaptation would be a separate design choice, not part of standard Glicko. | Not specified for doubles. | The head-to-head formula is public; no official doubles rule was found. ([Glicko-2 specification](https://www.glicko.net/glicko/glicko2.pdf)) |
+
+### What the comparison establishes
+
+Yes, accounting for partner strength is common. UTR, DUPR, TrueSkill, USTA,
+Playtomic, and WPR all make the expected result depend on the Side as a whole.
+With those systems, beating the same opponents alongside a weaker partner is
+treated as more surprising than doing so alongside an equal or stronger one.
+
+However, partner awareness and asymmetric teammate changes are separate design
+choices:
+
+- UTR and USTA use partner-aware expectations but equal teammate effects.
+- TrueSkill and DUPR can produce different changes mainly because Players have
+  different uncertainty or history.
+- Playtomic publicly confirms both partner-aware expectations and different
+  teammate changes, but does not reveal the weights.
+- Age of Empires provides transparent own-Rating asymmetry precisely by
+  excluding the partner from each Player's expectation.
+
+No primary source reviewed publishes a `75% own Rating + 25% partner Rating`
+effective-Rating formula. The transparent published endpoints are instead:
+
+- `100% own + 0% partner`: Age of Empires' individual expectation; and
+- `50% own + 50% partner`: the ordinary doubles team average used by UTR and
+  DUPR, and equivalent to TrueSkill's additive team mean for two-Player Sides.
+
+A `75/25` blend is therefore a PadelClash product policy, not an imported
+standard. It is nevertheless a coherent midpoint: it moves each Player halfway
+from the current independent expectation toward the Side mean. It preserves
+own-Rating asymmetry while making a weaker partner increase the stronger
+winner's gain. PadelClash retains this as a future alternative rather than an
+adopted rule. If reconsidered, calibrate the coefficient against fixed examples
+and abuse cases: the research supports including the partner but does not
+identify `25%` as an empirically established weight.
 
 ## Adopted outcome
 

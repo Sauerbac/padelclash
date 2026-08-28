@@ -1,4 +1,4 @@
-import { LeaderboardView } from "@/components/leaderboard-view";
+import { LeaderboardRouteView } from "@/components/leaderboard-route-view";
 import { NotJoined } from "@/components/not-joined";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
@@ -11,7 +11,7 @@ export default async function LeaderboardPage() {
 
   const entries = await getLeaderboard(getDb());
   return (
-    <LeaderboardView
+    <LeaderboardRouteView
       entries={entries}
       youId={access.player?.id ?? null}
       isAdmin={access.isAdmin}

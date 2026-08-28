@@ -3,6 +3,8 @@ import type { PullIndicatorPhase } from "@/components/pull-to-refresh";
 import { TabShell } from "@/components/tab-shell";
 import type { LeaderboardEntry } from "@/services/matches";
 import type { ScreenCase } from "../screen-cases";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
+import { NoSavedView } from "@/components/saved-view-fallback";
 import { CASEY, INGRID, LONG, YOU } from "./shared";
 
 const FULL: LeaderboardEntry[] = [
@@ -81,10 +83,36 @@ const PULL_CASES: Record<PullIndicatorPhase, ScreenCase> = {
     note: "The paired arrows have cross-faded to one centered spinner-and-label group. Standings hold their loading offset until the new projection arrives, then ease back to normal.",
     render: () => refreshPreview("refreshing"),
   },
+  "poor-connection": {
+    title: "Refresh on a poor connection",
+    note: "The existing Rankings remain visible while the five-second status reports a poor connection.",
+    render: () => refreshPreview("poor-connection"),
+  },
 };
 
 export const LEADERBOARD_CASES: Record<string, ScreenCase> = {
   ...PULL_CASES,
+
+  skeleton: {
+    title: "Rankings destination skeleton",
+    note: "The stable table-shaped loading surface appears as soon as Rankings is selected.",
+    render: () => <TabShell pathname="/leaderboard"><ScreenSkeleton kind="leaderboard" /></TabShell>,
+  },
+  "saved-view": {
+    title: "Timestamped read-only Saved View",
+    note: "A poor connection reveals the last Rankings projection without enabling uncached Player Detail navigation.",
+    render: () => <TabShell pathname="/leaderboard"><LeaderboardView entries={FULL} youId={YOU.id} isAdmin={false} savedAt={new Date("2026-08-27T19:15:00Z")} /></TabShell>,
+  },
+  "no-saved-data": {
+    title: "Poor connection without Saved View",
+    note: "No stale data is invented; the state offers an explicit retry.",
+    render: () => <TabShell pathname="/leaderboard"><NoSavedView reloadOnRetry={false} /></TabShell>,
+  },
+  recovery: {
+    title: "Recovered fresh Rankings",
+    note: "The live projection replaces the Saved View and restores ordinary Player links.",
+    render: () => <TabShell pathname="/leaderboard"><LeaderboardView entries={FULL} youId={YOU.id} isAdmin={false} /></TabShell>,
+  },
 
   mixed: {
     title: "Podium plus ranked and provisional rows",

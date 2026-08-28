@@ -1,4 +1,4 @@
-import { FeedView } from "@/components/feed-view";
+import { FeedRouteView } from "@/components/feed-route-view";
 import { NotJoined } from "@/components/not-joined";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
@@ -11,13 +11,7 @@ export default async function FeedPage() {
   if (!access) return <NotJoined />;
 
   const { player: you, isAdmin } = access;
+  const feed = await getFeed(getDb());
 
-  return (
-    <FeedView
-      you={you}
-      isAdmin={isAdmin}
-      feed={await getFeed(getDb())}
-      now={new Date()}
-    />
-  );
+  return <FeedRouteView you={you} isAdmin={isAdmin} feed={feed} now={new Date()} />;
 }

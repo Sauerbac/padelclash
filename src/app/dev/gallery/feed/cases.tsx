@@ -2,6 +2,8 @@ import { FeedView } from "@/components/feed-view";
 import { InvitationEntry } from "@/components/invitation-entry";
 import { NotJoined } from "@/components/not-joined";
 import type { PullIndicatorPhase } from "@/components/pull-to-refresh";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
+import { NoSavedView } from "@/components/saved-view-fallback";
 import {
   IncompatibleQueuedMatchCard,
   QueuedMatchCard,
@@ -86,10 +88,45 @@ const PULL_CASES: Record<PullIndicatorPhase, FeedCase> = {
     note: "The paired arrows have cross-faded to one centered spinner-and-label group. Content holds its loading offset until the new Feed arrives, then eases back to normal.",
     render: () => refreshPreview("refreshing"),
   },
+  "poor-connection": {
+    title: "Refresh on a poor connection",
+    note: "The existing Feed stays visible after five seconds while the non-blocking status names the connection problem.",
+    render: () => refreshPreview("poor-connection"),
+  },
 };
 
 export const FEED_CASES: Record<string, FeedCase> = {
   ...PULL_CASES,
+
+  skeleton: {
+    title: "Feed destination skeleton",
+    note: "Destination-shaped loading feedback appears immediately while the live projection is requested.",
+    render: () => <TabShell pathname="/"><ScreenSkeleton kind="feed" /></TabShell>,
+  },
+
+  "saved-view": {
+    title: "Timestamped read-only Saved View",
+    note: "After five seconds, the last successful projection replaces the skeleton. Writes are absent and Player Detail links explain that they need a connection.",
+    render: () => (
+      <TabShell pathname="/">
+        <FeedView you={YOU} isAdmin={false} feed={FEED} now={NOW} queued={noQueue} savedAt={NOW} />
+      </TabShell>
+    ),
+  },
+
+  "no-saved-data": {
+    title: "Poor connection without Saved View",
+    note: "A joined installation that has never received Feed data gets an honest retryable connection state.",
+    render: () => <TabShell pathname="/"><NoSavedView reloadOnRetry={false} /></TabShell>,
+  },
+
+  recovery: {
+    title: "Recovered fresh Feed",
+    note: "A late successful live projection atomically replaces the Saved View and restores current write affordances.",
+    render: () => (
+      <TabShell pathname="/"><FeedView you={YOU} isAdmin={false} feed={FEED} now={NOW} queued={noQueue} /></TabShell>
+    ),
+  },
 
   bound: {
     title: "Bound device, matches in the log",

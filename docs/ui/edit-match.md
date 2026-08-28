@@ -65,6 +65,12 @@ server action is pending. Validation is the same as Log Match. On success:
 On a server error, keep the form and show the error inline. An offline edit is
 not queued; show `You’re offline — edits need a connection.`
 
+After five seconds without a response, keep the form visible and show `Still
+waiting for the server…`. After fifteen seconds, add `Check result`, which
+reloads authoritative state. Neither state claims failure or cancellation: the
+server may already have committed the correction. Delete uses the same five-
+and fifteen-second uncertainty copy from its Feed action.
+
 ## Missing match
 
 An unknown or malformed match ID renders the framework’s not-found view. It is

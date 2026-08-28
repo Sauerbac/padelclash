@@ -18,6 +18,7 @@ export function LogMatchView({
   sharedMatchCounts,
   initialDraft,
   actions,
+  rosterStatus,
 }: {
   roster: RosterPlayer[];
   reservedPlayerNames: string[];
@@ -25,10 +26,19 @@ export function LogMatchView({
   sharedMatchCounts?: SharedMatchCounts;
   initialDraft?: MatchFormDraft;
   actions?: MatchFormActions;
+  rosterStatus?: { kind: "checking" } | { kind: "saved"; refreshedAt: Date };
 }) {
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
       <PageHeader kicker="New match" title="Log Match" />
+
+      {rosterStatus && (
+        <p role="status" className="font-mono text-[11px] font-semibold tracking-[1px] text-muted-foreground uppercase">
+          {rosterStatus.kind === "checking"
+            ? "Checking for roster updates…"
+            : `Using saved roster from ${rosterStatus.refreshedAt.toLocaleString()}`}
+        </p>
+      )}
 
       {logger ? (
         <MatchForm
@@ -38,6 +48,7 @@ export function LogMatchView({
           sharedMatchCounts={sharedMatchCounts}
           initialDraft={initialDraft}
           actions={actions}
+          draftContinuity="fresh"
         />
       ) : (
         <section className="border p-4">

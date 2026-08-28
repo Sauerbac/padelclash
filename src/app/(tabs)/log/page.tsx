@@ -1,4 +1,4 @@
-import { LogMatchView } from "@/components/log-match-view";
+import { LogMatchRouteView } from "@/components/log-match-route-view";
 import { NotJoined } from "@/components/not-joined";
 import { viewerForPrivateRead } from "@/services/auth/authz";
 import { getDb } from "@/services/db";
@@ -19,7 +19,7 @@ export default async function LogMatchPage() {
   const roster = allPlayers.filter((player) => player.retiredAt === null);
 
   return (
-    <LogMatchView
+    <LogMatchRouteView
       roster={roster.map(({ id, name }) => ({ id, name }))}
       reservedPlayerNames={allPlayers.map(({ name }) => name)}
       logger={you ? { id: you.id, name: you.name } : null}

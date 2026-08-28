@@ -35,6 +35,12 @@ export function DeleteActionCases() {
       <Labelled label="pending (delete stays disabled)">
         <MatchCardActions matchId={MATCH_ID} deleteMatch={neverResolves} />
       </Labelled>
+      <Labelled label="still waiting after 5 seconds">
+        <MatchCardActions matchId={MATCH_ID} deleteMatch={neverResolves} waitPreview="slow" />
+      </Labelled>
+      <Labelled label="check result after 15 seconds">
+        <MatchCardActions matchId={MATCH_ID} deleteMatch={neverResolves} waitPreview="uncertain" />
+      </Labelled>
       <Labelled label="refused (alerts the reason)">
         <MatchCardActions matchId={MATCH_ID} deleteMatch={refuses} />
       </Labelled>

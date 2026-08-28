@@ -16,18 +16,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { LeaderboardEntry } from "@/services/matches";
+import { ConnectionStatus } from "@/components/connection-status";
+import { PlayerNavigationProvider } from "@/components/player-navigation-context";
 
 export function LeaderboardView({
   entries,
   youId,
   isAdmin,
   pullToRefreshPhase,
+  savedAt,
 }: {
   entries: LeaderboardEntry[];
   youId: string | null;
   isAdmin: boolean;
   /** Fixture-only phase pin; production leaves the gesture interactive. */
   pullToRefreshPhase?: PullIndicatorPhase;
+  savedAt?: Date;
 }) {
   const hasUnranked = entries.some((entry) => entry.rank === null);
   const toPlace = (entry: LeaderboardEntry): PodiumPlace => ({
@@ -48,6 +52,7 @@ export function LeaderboardView({
   const rows = podium ? entries.filter((entry) => !top3.includes(entry)) : entries;
 
   return (
+    <PlayerNavigationProvider needsConnection={Boolean(savedAt)}>
     <PullToRefresh previewPhase={pullToRefreshPhase}>
       <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
         <PageHeader
@@ -61,6 +66,8 @@ export function LeaderboardView({
             ) : undefined
           }
         />
+
+        {savedAt && <ConnectionStatus refreshedAt={savedAt} showRetry />}
 
         {entries.length === 0 ? (
           <p className="text-[15px] font-semibold text-muted-foreground">
@@ -109,5 +116,6 @@ export function LeaderboardView({
         )}
       </main>
     </PullToRefresh>
+    </PlayerNavigationProvider>
   );
 }

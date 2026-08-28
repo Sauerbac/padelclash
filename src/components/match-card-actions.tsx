@@ -9,6 +9,7 @@ import {
 } from "@/app/actions/matches";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { useProlongedWrite } from "@/lib/use-prolonged-write";
 
 /**
  * Edit/delete affordances on a feed card. Only rendered when the viewer has
@@ -23,17 +24,30 @@ export function MatchCardActions({
    * "clean up" this default into a required prop.
    */
   deleteMatch = deleteMatchAction,
+  waitPreview,
 }: {
   matchId: string;
   deleteMatch?: (matchId: string) => Promise<DeleteMatchActionResult>;
+  /** Gallery-only prolonged delete state. */
+  waitPreview?: "slow" | "uncertain";
 }) {
   const [pending, startTransition] = useTransition();
+  const { writeWait, begin: beginWriteWait, finish: finishWriteWait } = useProlongedWrite();
+  const visibleWriteWait = waitPreview ?? writeWait;
 
   function remove() {
     startTransition(async () => {
-      const result = await deleteMatch(matchId);
-      // revalidatePath in the action refreshes the feed on success.
-      if (!result.ok) window.alert(result.error);
+      beginWriteWait();
+      try {
+        const result = await deleteMatch(matchId);
+        finishWriteWait();
+        // revalidatePath in the action refreshes the feed on success.
+        if (!result.ok) window.alert(result.error);
+      } catch {
+        window.alert("The server could not be reached. The result is unknown; check the Feed before trying again.");
+      } finally {
+        finishWriteWait();
+      }
     });
   }
 
@@ -42,7 +56,17 @@ export function MatchCardActions({
   const target = "size-10 -my-1.5";
 
   return (
-    <div className="-mr-1.5 flex gap-0.5">
+    <div className="-mr-1.5 flex items-center gap-0.5">
+      {visibleWriteWait !== "normal" && (
+        <span role="status" aria-live="polite" className="mr-1 max-w-28 text-right font-mono text-[9px] leading-tight text-muted-foreground uppercase">
+          Still waiting for the server…
+          {visibleWriteWait === "uncertain" && (
+            <Button type="button" variant="link" size="xs" className="block h-auto w-full p-0 text-[9px]" onClick={() => window.location.reload()}>
+              Check result
+            </Button>
+          )}
+        </span>
+      )}
       <Button
         asChild
         variant="ghost"
