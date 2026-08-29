@@ -1,5 +1,6 @@
 import { TabBar } from "@/components/tab-bar";
 import { LogDraftContinuityProvider } from "@/components/log-draft-continuity";
+import { RefreshAttemptProvider } from "@/components/refresh-attempt-context";
 
 /**
  * The three-tab chrome: a content column sized to its children, with the
@@ -24,11 +25,13 @@ export function TabShell({
     // item collapses to the viewport and its content merely overflows —
     // dragging the tab-bar reserve below up with it, out of reach of the
     // scroller. Sizing to content and growing only via min-height fixes both.
-    <LogDraftContinuityProvider pathname={pathname}>
-      <div className="flex min-h-full shrink-0 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-        {children}
-        <TabBar pathname={pathname} />
-      </div>
-    </LogDraftContinuityProvider>
+    <RefreshAttemptProvider>
+      <LogDraftContinuityProvider pathname={pathname}>
+        <div className="flex min-h-full shrink-0 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
+          {children}
+          <TabBar pathname={pathname} />
+        </div>
+      </LogDraftContinuityProvider>
+    </RefreshAttemptProvider>
   );
 }

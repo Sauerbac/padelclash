@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, LoaderCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
 import {
   beginPull,
   finishPull,
@@ -12,7 +11,7 @@ import {
   type PullState,
 } from "@/lib/pull-to-refresh";
 import { cn } from "@/lib/utils";
-import { createSlowConnectionClock } from "@/lib/slow-connection";
+import { useRefreshAttempt } from "@/components/refresh-attempt-context";
 
 export type PullIndicatorPhase = Exclude<PullPhase, "idle"> | "refreshing" | "poor-connection";
 
@@ -28,43 +27,21 @@ export function PullToRefresh({
   /** Pins a documented indicator state in the fixture-only gallery. */
   previewPhase?: PullIndicatorPhase;
 }) {
-  const router = useRouter();
+  const { phase: refreshPhase, begin, subscribeToCompletion } =
+    useRefreshAttempt();
   const containerRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<PullState>(IDLE_PULL_STATE);
   const pendingRef = useRef(false);
-  const sawPendingRef = useRef(false);
   const [pull, setPull] = useState<PullState>(IDLE_PULL_STATE);
-  const [refreshCommitted, setRefreshCommitted] = useState(false);
-  const [refreshSlow, setRefreshSlow] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const isRefreshing = refreshCommitted || isPending;
+  const isRefreshing = refreshPhase !== "idle";
 
   useEffect(() => {
-    pendingRef.current = isRefreshing;
-
-    if (isPending) {
-      sawPendingRef.current = true;
-      return;
-    }
-
-    if (!refreshCommitted || !sawPendingRef.current) return;
-
-    sawPendingRef.current = false;
-    pendingRef.current = false;
-    stateRef.current = IDLE_PULL_STATE;
-    setPull(IDLE_PULL_STATE);
-    setRefreshCommitted(false);
-  }, [isPending, isRefreshing, refreshCommitted]);
-
-  useEffect(() => {
-    if (!isRefreshing) return;
-    const clock = createSlowConnectionClock({ onSlow: () => setRefreshSlow(true) });
-    clock.start();
-    return () => {
-      clock.dispose();
-      setRefreshSlow(false);
-    };
-  }, [isRefreshing]);
+    return subscribeToCompletion(() => {
+      pendingRef.current = false;
+      stateRef.current = IDLE_PULL_STATE;
+      setPull(IDLE_PULL_STATE);
+    });
+  }, [subscribeToCompletion]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -75,7 +52,9 @@ export function PullToRefresh({
       stateRef.current = next;
       setPull(next);
     };
-    const reset = () => update(IDLE_PULL_STATE);
+    const reset = () => {
+      if (!pendingRef.current) update(IDLE_PULL_STATE);
+    };
 
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1 || pendingRef.current) return;
@@ -102,17 +81,18 @@ export function PullToRefresh({
     };
 
     const onTouchEnd = () => {
+      if (pendingRef.current) return;
       const result = finishPull(stateRef.current);
-      if (result.shouldRefresh && !pendingRef.current) {
+      if (result.shouldRefresh) {
+        if (!begin()) return;
         const refreshingState: PullState = {
           phase: "ready",
           start: null,
           distance: RESTING_REFRESH_DISTANCE,
         };
         pendingRef.current = true;
-        update(refreshingState);
-        setRefreshCommitted(true);
-        startTransition(() => router.refresh());
+        stateRef.current = refreshingState;
+        setPull(refreshingState);
         return;
       }
 
@@ -130,12 +110,14 @@ export function PullToRefresh({
       container.removeEventListener("touchend", onTouchEnd);
       container.removeEventListener("touchcancel", reset);
     };
-  }, [previewPhase, router]);
+  }, [begin, previewPhase]);
 
   const visiblePhase: PullIndicatorPhase | null =
     previewPhase ??
     (isRefreshing
-      ? refreshSlow ? "poor-connection" : "refreshing"
+      ? refreshPhase === "poor-connection"
+        ? "poor-connection"
+        : "refreshing"
       : pull.phase === "idle"
         ? null
         : pull.phase);
@@ -222,13 +204,24 @@ export function PullToRefresh({
           <span
             className={cn(
               "col-span-3 col-start-1 row-start-1 flex items-center justify-center gap-2 text-center transition-[opacity,transform] duration-300 ease-out",
-              visiblePhase === "refreshing" || visiblePhase === "poor-connection"
+              visiblePhase === "refreshing"
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",
             )}
           >
             <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
-            {visiblePhase === "poor-connection" ? "Connection is poor" : "Refreshing"}
+            Refreshing
+          </span>
+          <span
+            className={cn(
+              "col-span-3 col-start-1 row-start-1 flex items-center justify-center gap-2 text-center transition-[opacity,transform] duration-300 ease-out",
+              visiblePhase === "poor-connection"
+                ? "translate-y-0 opacity-100"
+                : "translate-y-1 opacity-0",
+            )}
+          >
+            <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />
+            Connection is poor
           </span>
         </div>
       </div>

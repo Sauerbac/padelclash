@@ -13,5 +13,14 @@ export default async function FeedPage() {
   const { player: you, isAdmin } = access;
   const feed = await getFeed(getDb());
 
-  return <FeedRouteView you={you} bindingId={access.bindingId} isAdmin={isAdmin} feed={feed} now={new Date()} />;
+  return (
+    <FeedRouteView
+      you={you}
+      bindingId={access.bindingId}
+      isAdmin={isAdmin}
+      feed={feed}
+      now={new Date()}
+      refreshMarker={crypto.randomUUID()}
+    />
+  );
 }

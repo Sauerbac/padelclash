@@ -16,6 +16,7 @@ export default async function LeaderboardPage() {
       youId={access.player?.id ?? null}
       isAdmin={access.isAdmin}
       bindingId={access.bindingId}
+      refreshMarker={crypto.randomUUID()}
     />
   );
 }
