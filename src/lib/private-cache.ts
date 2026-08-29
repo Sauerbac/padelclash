@@ -1,13 +1,14 @@
 /**
  * Dropping legacy cached private pages after revocation.
  *
- * Current workers never cache private navigations. This cleanup remains for
- * installations upgrading from the old worker, whose `padelclash-pages-*`
- * caches may contain Feed, Leaderboard, or Player Detail HTML.
+ * Current workers retain at most one late, status-checked navigation readiness
+ * marker long enough for the fallback shell to adopt it. Legacy workers also
+ * used `padelclash-pages-*` caches.
  *
  * Two deliberate choices:
  *
- * - Only the retired `padelclash-pages-*` namespace is private. The generated
+ * - The retired `padelclash-pages-*` and one-shot `padelclash-navigation-*`
+ *   namespaces are private. The generated
  *   `padelclash-shell-*` cache contains the static offline Match-entry shell
  *   and must survive cleanup so an unbound device can still open safely.
  * - **Done from the window, not by messaging the worker.** The Cache API is
@@ -36,5 +37,5 @@ export async function dropPrivatePageCaches(): Promise<boolean> {
 }
 
 export function isPrivatePageCache(key: string): boolean {
-  return key.startsWith("padelclash-pages-");
+  return key.startsWith("padelclash-pages-") || key.startsWith("padelclash-navigation-");
 }

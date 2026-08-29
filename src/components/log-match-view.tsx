@@ -11,12 +11,19 @@ interface RosterPlayer {
   name: string;
 }
 
+export type RosterStatus =
+  | { kind: "live" }
+  | { kind: "checking" }
+  | { kind: "saved"; refreshedAt: Date }
+  | { kind: "missing" };
+
 export function LogMatchView({
   roster,
   reservedPlayerNames,
   logger,
   sharedMatchCounts,
   initialDraft,
+  initialDraftNamesByPlayerId,
   actions,
   rosterStatus,
 }: {
@@ -25,28 +32,36 @@ export function LogMatchView({
   logger: RosterPlayer | null;
   sharedMatchCounts?: SharedMatchCounts;
   initialDraft?: MatchFormDraft;
+  initialDraftNamesByPlayerId?: Record<string, string>;
   actions?: MatchFormActions;
-  rosterStatus?: { kind: "checking" } | { kind: "saved"; refreshedAt: Date };
+  rosterStatus?: RosterStatus;
 }) {
+  const status = rosterStatus ?? { kind: "live" as const };
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
       <PageHeader kicker="New match" title="Log Match" />
 
-      {rosterStatus && (
+      {(status.kind === "checking" || status.kind === "saved") && (
         <p role="status" className="font-mono text-[11px] font-semibold tracking-[1px] text-muted-foreground uppercase">
-          {rosterStatus.kind === "checking"
+          {status.kind === "checking"
             ? "Checking for roster updates…"
-            : `Using saved roster from ${rosterStatus.refreshedAt.toLocaleString()}`}
+            : `Using saved roster from ${status.refreshedAt.toLocaleString()}`}
         </p>
       )}
 
-      {logger ? (
+      {status.kind === "missing" ? (
+        <section className="border p-4">
+          <h2 className="font-display text-[26px] uppercase">Roster needed</h2>
+          <p className="mt-2 font-semibold text-muted-foreground">Open Log Match once while the server is reachable before logging without it.</p>
+        </section>
+      ) : logger ? (
         <MatchForm
           roster={roster}
           reservedPlayerNames={reservedPlayerNames}
           loggerId={logger.id}
           sharedMatchCounts={sharedMatchCounts}
           initialDraft={initialDraft}
+          initialDraftNamesByPlayerId={initialDraftNamesByPlayerId}
           actions={actions}
           draftContinuity="fresh"
         />

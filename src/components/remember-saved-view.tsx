@@ -2,39 +2,41 @@
 
 import { useEffect } from "react";
 import {
-  saveSavedView,
+  recordSavedView,
   saveViewerScope,
   type SavedViewKind,
 } from "@/services/offline/saved-views";
 
 export function RememberSavedView({
   kind,
-  bindingPlayerId,
+  bindingId,
+  playerId,
   projection,
 }: {
   kind: SavedViewKind;
-  bindingPlayerId: string;
-  projection: unknown;
+  bindingId: string;
+  playerId: string;
+  projection: Parameters<typeof recordSavedView>[2];
 }) {
   useEffect(() => {
-    void saveViewerScope({ kind: "player", playerId: bindingPlayerId })
-      .then(() => saveSavedView(kind, bindingPlayerId, projection))
-      .catch(() => undefined);
-  }, [bindingPlayerId, kind, projection]);
+    void recordSavedView(kind, { kind: "player", playerId, bindingId }, projection).catch(() => undefined);
+  }, [bindingId, kind, playerId, projection]);
   return null;
 }
 
 export function RememberViewerScope({
-  bindingPlayerId,
+  bindingId,
+  playerId,
 }: {
-  bindingPlayerId: string | null;
+  bindingId: string | null;
+  playerId?: string;
 }) {
   useEffect(() => {
     void saveViewerScope(
-      bindingPlayerId
-        ? { kind: "player", playerId: bindingPlayerId }
+      bindingId && playerId
+        ? { kind: "player", playerId, bindingId }
         : { kind: "admin-unbound" },
     ).catch(() => undefined);
-  }, [bindingPlayerId]);
+  }, [bindingId, playerId]);
   return null;
 }

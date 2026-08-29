@@ -26,8 +26,7 @@ import {
   loadOfflineMatchSnapshot,
   saveOfflineMatchSnapshot,
 } from "@/services/offline/snapshot";
-import { clearSavedViews } from "@/services/offline/saved-views";
-import { fetchWithDeadline } from "@/lib/fetch-deadline";
+import { clearSavedViews, loadViewerScope } from "@/services/offline/saved-views";
 
 const CLEANUP_OWED_KEY = "pc_cleanup_owed";
 let owedInMemory = false;
@@ -76,6 +75,10 @@ export function OfflineLifecycle() {
       clearSavedViews,
       snapshotPlayerId: async () =>
         (await loadOfflineMatchSnapshot())?.player.id ?? null,
+      savedViewBindingId: async () => {
+        const scope = await loadViewerScope();
+        return scope?.kind === "player" ? scope.bindingId : null;
+      },
       refreshSnapshot,
       listQueuedMatches,
       submitMatch: async (match) => logMatchAction(toPayload(match)),
@@ -112,10 +115,11 @@ export function OfflineLifecycle() {
   return null;
 }
 
-async function contactSession(): Promise<SessionStatus> {
-  const response = await fetchWithDeadline("/api/session", {
+async function contactSession(signal: AbortSignal): Promise<SessionStatus> {
+  const response = await fetch("/api/session", {
     cache: "no-store",
     credentials: "same-origin",
+    signal,
   });
   if (!response.ok) throw new Error("Session contact failed");
   return (await response.json()) as SessionStatus;
@@ -124,10 +128,11 @@ async function contactSession(): Promise<SessionStatus> {
 async function refreshSnapshot(player: {
   id: string;
   name: string;
-}): Promise<void> {
-  const response = await fetchWithDeadline("/api/offline-snapshot", {
+}, signal: AbortSignal): Promise<void> {
+  const response = await fetch("/api/offline-snapshot", {
     cache: "no-store",
     credentials: "same-origin",
+    signal,
   });
   if (!response.ok) throw new Error("Snapshot refresh failed");
   const snapshot = (await response.json()) as {

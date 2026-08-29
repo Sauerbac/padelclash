@@ -21,6 +21,7 @@ import { cookies } from "next/headers";
  */
 export interface SessionStatus {
   bound: boolean;
+  bindingId: string | null;
   player: { id: string; name: string } | null;
   /**
    * True when this installation *presented* a credential that no longer
@@ -47,6 +48,7 @@ export async function GET(): Promise<NextResponse<SessionStatus>> {
 
     return noStore({
       bound: true,
+      bindingId: binding.binding.id,
       player: { id: binding.player.id, name: binding.player.name },
       revoked: false,
     });
@@ -54,7 +56,7 @@ export async function GET(): Promise<NextResponse<SessionStatus>> {
 
   if (presented) await clearBindingCookie();
 
-  return noStore({ bound: false, player: null, revoked: presented });
+  return noStore({ bound: false, bindingId: null, player: null, revoked: presented });
 }
 
 // Never cacheable: a stale "you're fine" is precisely the failure this exists

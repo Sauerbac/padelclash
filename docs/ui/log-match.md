@@ -46,6 +46,13 @@ stable Player ID. A missing or Retired selected Player remains visible but is
 invalid until replaced. Without a snapshot, the device must first open the app
 successfully while joined and online.
 
+When a cold private navigation is served by the offline application shell, its
+server render and first client render share the same small `Opening
+PadelClash…` state before the browser pathname is adopted. The hydrated shell
+then shows the Log Match recovery surface with `Server unavailable` and the
+snapshot-first roster flow; it must not produce a hydration warning. This state
+is catalogued by the `offline-shell-hydrated` recovery fixture.
+
 ## Unbound state
 
 If the device is not bound, do not render the form. Show a card titled
@@ -214,8 +221,10 @@ When the create action is attempted while definitely offline, the action fails
 because the server cannot be reached, or five seconds pass without a response:
 
 - Store the full match payload locally, including player names for rendering.
-- Replace the form with a card titled `Match queued` and subtitle
-  `You’re offline right now.`
+- Replace the form with a card titled `Match queued` and explain that the
+  server has not responded, the Match is durably saved on this device, and it
+  is pending synchronization. Do not infer that the device is offline from a
+  slow response.
 - Explain that the match is safe on the device, will sync automatically when
   online, and will appear as pending sync in the Feed.
 - Provide `Log another match`, which resets the form and permits another local
@@ -227,4 +236,14 @@ If an edit fails while offline, keep the form visible and show
 
 The queued retry and original request share one client Match ID. A late original
 success removes the queued copy before showing its payoff, so the Feed and Match
-log never gain a duplicate.
+log never gain a duplicate. If the Logger has already started another draft,
+that older success reconciles storage without changing the new form. A late
+server refusal is written directly onto the queued card; a permanent refusal
+therefore exposes its error and explicit Discard action without waiting for a
+later lifecycle retry.
+
+If durable local storage rejects the queue write, the UI never claims `Match
+queued`. The form and draft remain visible with an explicit message that the
+server result is still unknown and the device could not save locally. Retrying
+the unchanged draft reuses the same client Match ID, so a late original success
+cannot turn the retry into a duplicate.

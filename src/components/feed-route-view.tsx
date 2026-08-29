@@ -10,22 +10,25 @@ export function FeedRouteView({
   isAdmin,
   feed,
   now,
+  bindingId,
 }: {
   you: { id: string; name: string } | null;
   isAdmin: boolean;
   feed: FeedMatch[];
   now: Date;
+  bindingId: string | null;
 }) {
   return (
     <>
       {you ? (
         <RememberSavedView
           kind="feed"
-          bindingPlayerId={you.id}
+          bindingId={bindingId!}
+          playerId={you.id}
           projection={{ you, feed }}
         />
       ) : (
-        <RememberViewerScope bindingPlayerId={null} />
+        <RememberViewerScope bindingId={null} />
       )}
       <FeedView you={you} isAdmin={isAdmin} feed={feed} now={now} />
     </>

@@ -24,6 +24,7 @@ export default async function LogMatchPage() {
       reservedPlayerNames={allPlayers.map(({ name }) => name)}
       logger={you ? { id: you.id, name: you.name } : null}
       sharedMatchCounts={sharedMatchCounts}
+      bindingId={access.bindingId}
     />
   );
 }

@@ -27,6 +27,7 @@ export default async function AdminPage() {
       generalLink={generalLink}
       now={now}
       viewerBindingPlayerId={binding?.player.id ?? null}
+      viewerBindingId={binding?.binding.id ?? null}
     />
   );
 }

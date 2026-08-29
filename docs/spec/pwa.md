@@ -78,6 +78,10 @@ This file is one part of the [PadelClash specification](../padelclash-spec.md).
 - A cold launch follows the intended route instead of silently turning Feed into
   Log Match. It reaches the application shell within the same five-second bound,
   where Feed can show its Saved View and Log Match can use its Match-entry snapshot.
+  A usable navigation response that arrives after the shell is stored as a
+  one-shot, build-versioned recovery response; the shell consumes that exact
+  response in one controlled navigation rather than starting another network
+  race. Non-OK and non-HTML responses never mark recovery ready.
   Once the server identifies a revoked or different binding, all mismatched Saved
   Views and snapshots are suppressed and cleared under the existing revocation
   rules.

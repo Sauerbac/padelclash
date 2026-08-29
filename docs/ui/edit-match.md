@@ -1,7 +1,8 @@
 # Edit Match
 
 **States: [`/dev/gallery/edit`](../../src/app/dev/gallery/[section]/page.tsx)** —
-editable, locked and successful-correction states through the shared form.
+connection-required loading, editable, locked and successful-correction states
+through the production loading/view components.
 
 ## Identity
 
@@ -17,6 +18,9 @@ played-at timestamp of an existing match. Saving replays the complete match log
 and can therefore change the rating history of later matches.
 
 ## Current structural layout
+
+While this online-only route contacts the server, it shows an Edit Match-titled
+connection-required loading card rather than an inherited Feed Saved View.
 
 ### Editable state
 

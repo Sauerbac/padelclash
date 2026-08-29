@@ -7,6 +7,7 @@ import {
 
 export interface OfflineSessionStatus {
   bound: boolean;
+  bindingId: string | null;
   player: { id: string; name: string } | null;
   revoked: boolean;
 }
@@ -20,7 +21,7 @@ export type QueueSubmissionResult =
     };
 
 export interface OfflineLifecycleDependencies {
-  contactSession(): Promise<OfflineSessionStatus>;
+  contactSession(signal: AbortSignal): Promise<OfflineSessionStatus>;
   cleanupLatch: {
     set(): void;
     pending(): boolean;
@@ -31,7 +32,8 @@ export interface OfflineLifecycleDependencies {
   clearSnapshot(): Promise<void>;
   clearSavedViews(): Promise<void>;
   snapshotPlayerId(): Promise<string | null>;
-  refreshSnapshot(player: { id: string; name: string }): Promise<void>;
+  savedViewBindingId(): Promise<string | null>;
+  refreshSnapshot(player: { id: string; name: string }, signal: AbortSignal): Promise<void>;
   listQueuedMatches(): Promise<QueuedMatchRecord[]>;
   submitMatch(match: QueuedMatch): Promise<QueueSubmissionResult>;
   noteRefusal(
@@ -51,6 +53,7 @@ export interface OfflineLifecycle {
 }
 
 export const TRANSIENT_RETRY_MS = 60_000;
+export const OPERATION_TIMEOUT_MS = 30_000;
 
 /**
  * One serialized installation lifecycle. Every browser signal enters through
@@ -63,17 +66,50 @@ export function createOfflineLifecycle(
   let running: Promise<void> | null = null;
   let rerunRequested = false;
   let cancelRetry: (() => void) | null = null;
+  let activeController: AbortController | null = null;
+  const cancelActiveOperations = new Set<() => void>();
   let disposed = false;
+
+  const bounded = <T>(operation: Promise<T>, onTimeout?: () => void) =>
+    new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const finish = (complete: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cancelActiveOperations.delete(cancel);
+        complete();
+      };
+      const cancel = () => finish(() => reject(new Error("Offline lifecycle disposed")));
+      const timer = setTimeout(() => {
+        onTimeout?.();
+        finish(() => reject(new Error("Offline operation timed out")));
+      }, OPERATION_TIMEOUT_MS);
+      cancelActiveOperations.add(cancel);
+      operation.then(
+        (value) => finish(() => resolve(value)),
+        (error) => finish(() => reject(error)),
+      );
+    });
 
   const runPass = async () => {
     cancelRetry?.();
     cancelRetry = null;
 
-    const status = await dependencies.contactSession();
+    const controller = new AbortController();
+    activeController = controller;
+    const status = await bounded(
+      dependencies.contactSession(controller.signal),
+      () => controller.abort(),
+    );
     if (status.revoked) dependencies.cleanupLatch.set();
     if (status.player) {
       const snapshotPlayerId = await dependencies.snapshotPlayerId();
       if (snapshotPlayerId && snapshotPlayerId !== status.player.id) {
+        dependencies.cleanupLatch.set();
+      }
+      const savedViewBindingId = await dependencies.savedViewBindingId();
+      if (savedViewBindingId && savedViewBindingId !== status.bindingId) {
         dependencies.cleanupLatch.set();
       }
     }
@@ -105,7 +141,10 @@ export function createOfflineLifecycle(
     if (!status.bound || !status.player) return;
 
     try {
-      await dependencies.refreshSnapshot(status.player);
+      await bounded(
+        dependencies.refreshSnapshot(status.player, controller.signal),
+        () => controller.abort(),
+      );
     } catch {
       // A stale snapshot is less harmful than blocking a valid queue drain.
     }
@@ -117,8 +156,14 @@ export function createOfflineLifecycle(
 
       let result: QueueSubmissionResult;
       try {
-        result = await dependencies.submitMatch(match);
+        result = await bounded(dependencies.submitMatch(match));
       } catch {
+        if (!disposed && !cancelRetry) {
+          cancelRetry = dependencies.scheduleRetry(
+            () => void trigger(),
+            TRANSIENT_RETRY_MS,
+          );
+        }
         return;
       }
       if (result.ok) {
@@ -144,6 +189,7 @@ export function createOfflineLifecycle(
       }
     }
     if (synced) dependencies.notifySynced();
+    if (activeController === controller) activeController = null;
   };
 
   const run = async () => {
@@ -152,8 +198,14 @@ export function createOfflineLifecycle(
       try {
         await runPass();
       } catch {
-        // Session/network failures leave durable state untouched. A later
-        // browser signal or scheduled retry starts a fresh pass.
+        // Contact failures must self-heal even at steady slow/offline latency;
+        // relying on another browser event can strand maintenance forever.
+        if (!disposed && !cancelRetry) {
+          cancelRetry = dependencies.scheduleRetry(
+            () => void trigger(),
+            TRANSIENT_RETRY_MS,
+          );
+        }
       }
     } while (rerunRequested && !disposed);
   };
@@ -174,6 +226,10 @@ export function createOfflineLifecycle(
     trigger,
     dispose() {
       disposed = true;
+      activeController?.abort();
+      activeController = null;
+      for (const cancel of cancelActiveOperations) cancel();
+      cancelActiveOperations.clear();
       rerunRequested = false;
       cancelRetry?.();
       cancelRetry = null;

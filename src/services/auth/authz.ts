@@ -17,6 +17,7 @@ import { currentBinding } from "./binding";
 export interface Viewer {
   /** The bound Player, or null for an Admin browsing without a binding. */
   player: Player | null;
+  bindingId: string | null;
   isAdmin: boolean;
 }
 
@@ -26,7 +27,7 @@ export interface Viewer {
  */
 export const currentViewer = cache(async function currentViewer(): Promise<Viewer> {
   const [binding, admin] = await Promise.all([currentBinding(), isAdmin()]);
-  return { player: binding?.player ?? null, isAdmin: admin };
+  return { player: binding?.player ?? null, bindingId: binding?.binding.id ?? null, isAdmin: admin };
 });
 
 /** Whether this viewer may see private circle data (decisions 33 and 49). */

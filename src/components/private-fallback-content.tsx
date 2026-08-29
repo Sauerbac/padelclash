@@ -19,7 +19,7 @@ export function PrivateFallbackContent({
   if (pathname === "/log" || pathname === "/offline") {
     return (
       <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
-        <PageHeader kicker={reset ? "Connection problem" : "No connection"} title="Log Match" />
+        <PageHeader kicker="Server unavailable" title="Log Match" />
         <OfflineMatchEntry checkingRoster />
       </main>
     );
@@ -27,7 +27,7 @@ export function PrivateFallbackContent({
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-4 px-5 pt-6 pb-10">
       <section className="border p-5">
-        <h1 className="font-display text-[30px] uppercase">Connection needed</h1>
+        <h1 className="font-display text-[30px] uppercase">Server connection needed</h1>
         <p className="mt-2 font-semibold text-muted-foreground">
           This private page is not stored on the device. Feed, Rankings, and Log Match remain available from the tabs.
         </p>

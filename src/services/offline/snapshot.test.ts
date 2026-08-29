@@ -3,6 +3,7 @@ import { IDBFactory } from "fake-indexeddb";
 import {
   enqueueMatch,
   listQueuedMatches,
+  noteQueuedMatchRefusal,
   removeQueuedMatch,
 } from "./queue";
 import { isIncompatibleQueuedMatch } from "./queue-contract";
@@ -139,6 +140,31 @@ describe("offline Match-entry snapshot", () => {
         { kind: "player", playerId: "player-3" },
       ],
     });
+  });
+
+  it("cannot resurrect a Match removed while a late refusal reconciles", async () => {
+    const id = "01900000-0000-7000-8000-000000000002";
+    await enqueueMatch({
+      id,
+      playedAt: "2026-07-22T12:00:00.000Z",
+      ownerPlayerId: "player-1",
+      ownerPlayerName: "Alex",
+      sides: {
+        A: [playerParticipant("player-1")],
+        B: [playerParticipant("player-2")],
+      },
+      names: { A: ["Alex"], B: ["Blair"] },
+      winnerSide: "A",
+      sets: null,
+      queuedAt: "2026-07-22T12:01:00.000Z",
+    });
+
+    await Promise.all([
+      noteQueuedMatchRefusal(id, "invalid", "Late refusal"),
+      removeQueuedMatch(id),
+    ]);
+
+    expect(await listQueuedMatches()).toEqual([]);
   });
 
   it("surfaces an incompatible durable record for explicit discard", async () => {

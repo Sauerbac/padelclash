@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   editMatchAction,
   logMatchAction,
@@ -17,9 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RatingPayoff } from "@/components/rating-payoff";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { enqueueMatch } from "@/services/offline/queue";
-import { removeQueuedMatch } from "@/services/offline/queue";
+import {
+  enqueueMatch,
+  noteQueuedMatchRefusal,
+  removeQueuedMatch,
+} from "@/services/offline/queue";
 import { submitResilientCreate } from "@/services/offline/resilient-create";
+import { isPermanentRefusal } from "@/domain/sync-policy";
 import { useProlongedWrite } from "@/lib/use-prolonged-write";
 import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
@@ -116,6 +120,7 @@ export function MatchForm({
   sharedMatchCounts = NO_SHARED_MATCHES,
   editing,
   initialDraft,
+  initialDraftNamesByPlayerId,
   actions,
   draftContinuity,
   writeWaitPreview,
@@ -131,6 +136,8 @@ export function MatchForm({
   editing?: EditableMatch;
   /** Only the gallery passes this to start a new form with a valid draft. */
   initialDraft?: MatchFormDraft;
+  /** Gallery-only names for a fresh roster that no longer contains a selected Player. */
+  initialDraftNamesByPlayerId?: Record<string, string>;
   /** Gallery stubs; production uses the imported server actions. */
   actions?: MatchFormActions;
   /** Snapshot writes continuity; the one fresh replacement consumes it. */
@@ -196,9 +203,9 @@ export function MatchForm({
       Object.values(slots).flatMap((participant) =>
         participant?.kind === "player" ? [participant.playerId] : [],
       ),
-      restoredDraft?.namesByPlayerId ?? {},
+      restoredDraft?.namesByPlayerId ?? initialDraftNamesByPlayerId ?? {},
     ).entries;
-  }, [restoredDraft, roster, slots]);
+  }, [initialDraftNamesByPlayerId, restoredDraft, roster, slots]);
   const orderedRoster = useMemo(
     () => sortPlayersBySharedMatches(rosterWithRetainedSelections, currentSharedMatchCounts),
     [rosterWithRetainedSelections, currentSharedMatchCounts],
@@ -207,7 +214,10 @@ export function MatchForm({
   const [error, setError] = useState<string | null>(null);
   const [payoff, setPayoff] = useState<PayoffDelta[] | null>(null);
   const [queued, setQueued] = useState(false);
+  const [queuedRefusal, setQueuedRefusal] = useState<{ error: string; permanent: boolean } | null>(null);
   const [repeatLineup, setRepeatLineup] = useState<RepeatLineup | null>(null);
+  const activeQueuedAttempt = useRef<string | null>(null);
+  const [createId, setCreateId] = useState(uuidv7);
   const { writeWait, begin: beginWriteWait, finish: finishWriteWait } = useProlongedWrite();
   const [pending, startTransition] = useTransition();
   const visibleWriteWait = writeWaitPreview ?? writeWait;
@@ -341,7 +351,9 @@ export function MatchForm({
 
     startTransition(async () => {
       const payload = {
-        id: editing ? editing.id : uuidv7(),
+        // Keep one id for this draft across retries. If IndexedDB fails while
+        // the original request is still uncertain, retrying stays idempotent.
+        id: editing ? editing.id : createId,
         playedAt: playedAtDate.toISOString(),
         sides: toMatchParticipantSides(validation.sides),
         winnerSide: winner,
@@ -373,6 +385,8 @@ export function MatchForm({
         });
       };
       const showQueued = () => {
+        activeQueuedAttempt.current = payload.id;
+        setQueuedRefusal(null);
         setRepeatLineup(repeatLineupFromSides(payload.sides));
         clearContinuityDraft();
         setQueued(true);
@@ -384,9 +398,43 @@ export function MatchForm({
           submit: () => logMatch({ ...payload, ownerPlayerId: loggerId ?? "" }),
           enqueue: enqueueLocally,
           removeQueued: removeQueuedMatch,
+          noteRefusal: noteQueuedMatchRefusal,
           onQueued: showQueued,
+          onLateSettled: (result) => {
+            // A late result may update only the confirmation for its own
+            // attempt. Once "Log another" advances the id, the new draft is
+            // untouchable while durable queue reconciliation still completes.
+            if (activeQueuedAttempt.current !== payload.id) return;
+            if (result.ok) {
+              activeQueuedAttempt.current = null;
+              setQueued(false);
+              if (loggerId) {
+                setCurrentSharedMatchCounts((counts) =>
+                  addSharedMatchToCounts(
+                    counts,
+                    loggerId,
+                    Object.values(payload.sides).flatMap((side) =>
+                      side.flatMap((participant) =>
+                        participant.kind === "player" ? [participant.playerId] : [],
+                      ),
+                    ),
+                  ),
+                );
+              }
+              setPayoff(result.deltas);
+              return;
+            }
+            setQueuedRefusal({
+              error: result.error,
+              permanent: isPermanentRefusal(result.code),
+            });
+          },
         });
         if (outcome.kind === "queued") return;
+        if (outcome.kind === "not-durable") {
+          setError("The server did not respond and this device could not save the match. Your draft is still here — retry when ready.");
+          return;
+        }
         const result = outcome.result;
         if (result.ok) {
           if (loggerId) {
@@ -428,8 +476,10 @@ export function MatchForm({
   }
 
   function reset() {
+    activeQueuedAttempt.current = null;
     setPayoff(null);
     setQueued(false);
+    setQueuedRefusal(null);
     // Keep the submitted format and lineup for an immediate rematch. Guests
     // remain new match-scoped entries with the copied name, never identities.
     if (repeatLineup) {
@@ -441,9 +491,11 @@ export function MatchForm({
     setRecordSets(false);
     setSets([{ a: "", b: "" }]);
     setPlayedAt(nowLocal());
+    const nextCreateId = uuidv7();
+    setCreateId(nextCreateId);
   }
 
-  // No connection: the match is safe on the device, ratings come later.
+  // The server did not answer promptly; the durable local copy owns recovery.
   if (queued) {
     return (
       <div className="space-y-4">
@@ -452,11 +504,22 @@ export function MatchForm({
             Match queued
           </h2>
           <p className="mt-2 text-[15px] font-semibold text-muted-foreground">
-            You&apos;re offline right now. The match is saved on this device
-            and syncs automatically the next time you&apos;re online — until
-            then it shows as{" "}
-            <span className="text-foreground">pending sync</span> in your
-            feed.
+            {queuedRefusal ? (
+              <>
+                The server responded after this match was saved locally: {queuedRefusal.error}{" "}
+                It now appears as <span className="text-foreground">
+                  {queuedRefusal.permanent ? "can’t sync" : "pending sync"}
+                </span> in your feed{queuedRefusal.permanent ? ", where you can discard it explicitly." : " and will retry automatically."}
+              </>
+            ) : (
+              <>
+                The server has not responded. This match is saved on this device
+                and is pending sync. It will send automatically when the server is
+                reachable — until then it shows as{" "}
+                <span className="text-foreground">pending sync</span> in your
+                feed.
+              </>
+            )}
           </p>
         </section>
         <Button onClick={reset} className="w-full">

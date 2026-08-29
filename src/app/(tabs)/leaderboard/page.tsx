@@ -15,6 +15,7 @@ export default async function LeaderboardPage() {
       entries={entries}
       youId={access.player?.id ?? null}
       isAdmin={access.isAdmin}
+      bindingId={access.bindingId}
     />
   );
 }

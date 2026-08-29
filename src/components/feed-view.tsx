@@ -35,6 +35,7 @@ export function FeedView({
   queued = <QueuedMatches />,
   pullToRefreshPhase,
   savedAt,
+  playerConnectionExplanationPreview,
 }: {
   /** The Player bound to this device, or null for an Admin browsing unbound. */
   you: { id: string; name: string } | null;
@@ -46,11 +47,16 @@ export function FeedView({
   pullToRefreshPhase?: PullIndicatorPhase;
   /** Read-only projection fallback; fresh production views leave this unset. */
   savedAt?: Date;
+  /** Gallery-only pin for the Saved View Player-link explanation. */
+  playerConnectionExplanationPreview?: boolean;
 }) {
   const viewer = { playerId: you?.id ?? null, isAdmin };
 
   return (
-    <PlayerNavigationProvider needsConnection={Boolean(savedAt)}>
+    <PlayerNavigationProvider
+      needsConnection={Boolean(savedAt)}
+      explanationPreview={playerConnectionExplanationPreview}
+    >
     <PullToRefresh previewPhase={pullToRefreshPhase}>
       <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
         <PageHeader

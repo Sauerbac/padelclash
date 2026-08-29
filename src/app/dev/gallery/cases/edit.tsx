@@ -1,4 +1,6 @@
 import type { EditableMatch } from "@/components/match-form";
+import type { WriteWait } from "@/lib/use-prolonged-write";
+import { ConnectionRequiredLoading } from "@/components/connection-required-loading";
 import { TabShell } from "@/components/tab-shell";
 import {
   FixtureEditActionState,
@@ -57,8 +59,8 @@ const actionState = (
   />
 );
 
-export const EDIT_CASES: Record<string, ScreenCase> = {
-  editable: {
+const WRITE_WAIT_CASES: Record<WriteWait, ScreenCase> = {
+  normal: {
     title: "Editable Match",
     note: "The shared form is prefilled with doubles, a Guest, winner, sets and played time.",
     render: () => (
@@ -66,6 +68,25 @@ export const EDIT_CASES: Record<string, ScreenCase> = {
         {inert(editable())}
       </TabShell>
     ),
+  },
+  slow: {
+    title: "Correction still waiting",
+    note: "After five seconds, the form honestly reports the slow server without claiming failure or cancellation.",
+    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><EditMatchView state="editable" roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} editing={EDITING} writeWaitPreview="slow" /></TabShell>,
+  },
+  uncertain: {
+    title: "Correction result uncertain",
+    note: "After fifteen seconds, Check result reloads authoritative state because the server may already have committed.",
+    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><EditMatchView state="editable" roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} editing={EDITING} writeWaitPreview="uncertain" /></TabShell>,
+  },
+};
+
+export const EDIT_CASES: Record<string, ScreenCase> = {
+  ...WRITE_WAIT_CASES,
+  loading: {
+    title: "Edit Match contacting server",
+    note: "The online-only edit route names its destination while it waits and never renders a Feed fallback.",
+    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><ConnectionRequiredLoading title="Edit Match" /></TabShell>,
   },
   locked: {
     title: "Permission-locked Match",
@@ -93,16 +114,6 @@ export const EDIT_CASES: Record<string, ScreenCase> = {
         {actionState("pending")}
       </TabShell>
     ),
-  },
-  "still-waiting": {
-    title: "Correction still waiting",
-    note: "After five seconds, the form honestly reports the slow server without claiming failure or cancellation.",
-    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><EditMatchView state="editable" roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} editing={EDITING} writeWaitPreview="slow" /></TabShell>,
-  },
-  "check-result": {
-    title: "Correction result uncertain",
-    note: "After fifteen seconds, Check result reloads authoritative state because the server may already have committed.",
-    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><EditMatchView state="editable" roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} editing={EDITING} writeWaitPreview="uncertain" /></TabShell>,
   },
   "server-error": {
     title: "Correction refused by the server",

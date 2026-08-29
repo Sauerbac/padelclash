@@ -9,21 +9,24 @@ export function LeaderboardRouteView({
   entries,
   youId,
   isAdmin,
+  bindingId,
 }: {
   entries: LeaderboardEntry[];
   youId: string | null;
   isAdmin: boolean;
+  bindingId: string | null;
 }) {
   return (
     <>
       {youId ? (
         <RememberSavedView
           kind="leaderboard"
-          bindingPlayerId={youId}
+          bindingId={bindingId!}
+          playerId={youId}
           projection={{ youId, entries }}
         />
       ) : (
-        <RememberViewerScope bindingPlayerId={null} />
+        <RememberViewerScope bindingId={null} />
       )}
       <LeaderboardView entries={entries} youId={youId} isAdmin={isAdmin} />
     </>

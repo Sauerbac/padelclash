@@ -46,6 +46,7 @@ type AdminViewProps =
       initialBackupState?: DatabaseBackupState;
       /** Production loader supplies this; gallery fixtures omit device state. */
       viewerBindingPlayerId?: string | null;
+      viewerBindingId?: string | null;
     };
 
 export function AdminView(
@@ -62,8 +63,8 @@ export function AdminView(
   const logoutAction = props.actions?.logout ?? realLogoutAction;
   return (
     <main className="mx-auto w-full max-w-lg flex-1 space-y-5 px-5 pt-6 pb-10">
-      {props.viewerBindingPlayerId !== undefined && (
-        <RememberViewerScope bindingPlayerId={props.viewerBindingPlayerId} />
+      {props.viewerBindingId !== undefined && (
+        <RememberViewerScope bindingId={props.viewerBindingId} playerId={props.viewerBindingPlayerId ?? undefined} />
       )}
       <PageHeader
         kicker="The commissioner"

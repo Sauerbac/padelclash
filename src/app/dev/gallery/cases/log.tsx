@@ -1,5 +1,6 @@
 import { TabShell } from "@/components/tab-shell";
 import type { MatchFormDraft } from "@/components/match-form";
+import type { RosterStatus } from "@/components/log-match-view";
 import {
   FixtureLogActionState,
   FixtureLogMatchView as LogMatchView,
@@ -76,21 +77,45 @@ const LONG_NAME_DRAFT: MatchFormDraft = {
   sets: null,
 };
 
-export const LOG_CASES: Record<string, ScreenCase> = {
-  "roster-checking": {
+const ROSTER_CASES: Record<RosterStatus["kind"], ScreenCase> = {
+  live: {
+    title: "Fresh roster",
+    note: "The current roster is available and no degraded-state message is shown.",
+    render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} rosterStatus={{ kind: "live" }} />)}</TabShell>,
+  },
+  checking: {
     title: "Snapshot form while checking roster",
     note: "A previously joined Player can use the complete form immediately while current roster data loads in the background.",
     render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} rosterStatus={{ kind: "checking" }} />)}</TabShell>,
   },
-  "saved-roster": {
+  saved: {
     title: "Stale roster after five seconds",
     note: "The form remains usable and identifies the exact snapshot refresh time instead of calling the device online or offline.",
     render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} rosterStatus={{ kind: "saved", refreshedAt: new Date("2026-08-27T18:45:00Z") }} />)}</TabShell>,
   },
+  missing: {
+    title: "No Match-entry snapshot",
+    note: "A device that has never loaded the roster successfully cannot invent private Match-entry data.",
+    render: () => <TabShell pathname="/log"><LogMatchView roster={[]} reservedPlayerNames={[]} logger={YOU} rosterStatus={{ kind: "missing" }} /></TabShell>,
+  },
+};
+
+export const LOG_CASES: Record<string, ScreenCase> = {
+  ...ROSTER_CASES,
   recovery: {
     title: "Fresh roster recovered with draft intact",
     note: "Current Player names and choices replace snapshot data without resetting the in-progress lineup, result, scores, or played-at value.",
     render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={VALID_DRAFT} />)}</TabShell>,
+  },
+  "renamed-selection": {
+    title: "Selected Player renamed during refresh",
+    note: "Stable Player identity adopts the fresh roster name without losing the selected slot.",
+    render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER.map((player) => player.id === CASEY.id ? { ...player, name: "Casey Renamed" } : player)} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={VALID_DRAFT} />)}</TabShell>,
+  },
+  "missing-selected-player": {
+    title: "Selected Player missing or Retired",
+    note: "The historical selection remains visible but the draft must replace it before submission.",
+    render: () => <TabShell pathname="/log">{inert(<LogMatchView roster={ROSTER.filter((player) => player.id !== CASEY.id)} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={VALID_DRAFT} initialDraftNamesByPlayerId={{ [CASEY.id]: CASEY.name }} />)}</TabShell>,
   },
   bound: {
     title: "Joined Player",
@@ -188,6 +213,22 @@ export const LOG_CASES: Record<string, ScreenCase> = {
           logger={YOU}
           initialDraft={VALID_DRAFT}
           scenario="refused"
+          payoff={LOG_PAYOFF}
+        />
+      </TabShell>
+    ),
+  },
+  "storage-failure": {
+    title: "Local queue storage unavailable",
+    note: "The form and its stable Match id remain available when neither the server nor IndexedDB can confirm durability.",
+    render: () => (
+      <TabShell pathname="/log">
+        <FixtureLogActionState
+          roster={ROSTER}
+          reservedPlayerNames={RESERVED_NAMES}
+          logger={YOU}
+          initialDraft={VALID_DRAFT}
+          scenario="storage-failure"
           payoff={LOG_PAYOFF}
         />
       </TabShell>

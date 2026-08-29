@@ -92,13 +92,15 @@ export function FixtureLogActionState({
   initialDraft,
   ...props
 }: Omit<ComponentProps<typeof LogMatchView>, "actions" | "initialDraft"> & {
-  scenario: "pending" | "refused" | "success" | "offline";
+  scenario: "pending" | "refused" | "success" | "offline" | "storage-failure";
   payoff: PayoffDelta[];
   initialDraft: MatchFormDraft;
 }) {
   const result = (): Promise<LogMatchActionResult> => {
     if (scenario === "pending") return never();
-    if (scenario === "offline") return Promise.reject(new Error("offline"));
+    if (scenario === "offline" || scenario === "storage-failure") {
+      return Promise.reject(new Error("offline"));
+    }
     if (scenario === "success") {
       return Promise.resolve({
         ok: true,
@@ -121,6 +123,9 @@ export function FixtureLogActionState({
         actions={{
           ...matchActions,
           logMatch: result,
+          ...(scenario === "storage-failure"
+            ? { enqueue: async () => { throw new Error("storage unavailable"); } }
+            : {}),
         }}
       />
     </AutoClick>

@@ -1,9 +1,10 @@
 import {
   isPermanentRefusal,
 } from "../../domain/sync-policy";
-import { QUEUED_MATCHES_STORE, withOfflineStore } from "./db";
+import { openOfflineDb, QUEUED_MATCHES_STORE, withOfflineStore } from "./db";
 import {
   decodeQueuedMatch,
+  type QueuedMatch,
   type QueuedMatchInput,
   type QueuedMatchRecord,
 } from "./queue-contract";
@@ -60,6 +61,35 @@ export async function listQueuedMatches(): Promise<QueuedMatchRecord[]> {
 export async function removeQueuedMatch(id: string): Promise<void> {
   await withStore("readwrite", (store) => store.delete(id));
   notifyQueueChanged();
+}
+
+/** Records a server refusal learned by the original, late request. */
+export async function noteQueuedMatchRefusal(
+  id: string,
+  syncCode: NonNullable<QueuedMatch["syncCode"]>,
+  syncError: string,
+): Promise<void> {
+  const db = await openOfflineDb();
+  let changed = false;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(QUEUED_MATCHES_STORE, "readwrite");
+      const store = transaction.objectStore(QUEUED_MATCHES_STORE);
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const match = decodeQueuedMatch(request.result);
+        if (!match || match.recordState === "incompatible") return;
+        store.put({ ...match, syncCode, syncError });
+        changed = true;
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+  if (changed) notifyQueueChanged();
 }
 
 /**

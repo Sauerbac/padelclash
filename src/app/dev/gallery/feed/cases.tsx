@@ -4,6 +4,8 @@ import { NotJoined } from "@/components/not-joined";
 import type { PullIndicatorPhase } from "@/components/pull-to-refresh";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { NoSavedView } from "@/components/saved-view-fallback";
+import { OfflineRoute } from "@/components/offline-route";
+import { PrivateRouteError } from "@/components/private-route-error";
 import {
   IncompatibleQueuedMatchCard,
   QueuedMatchCard,
@@ -112,6 +114,34 @@ export const FEED_CASES: Record<string, FeedCase> = {
         <FeedView you={YOU} isAdmin={false} feed={FEED} now={NOW} queued={noQueue} savedAt={NOW} />
       </TabShell>
     ),
+  },
+
+  "saved-view-with-queue": {
+    title: "Saved View with local pending Matches",
+    note: "The degraded server projection still includes every device-local pending and refused card above it.",
+    render: () => (
+      <TabShell pathname="/"><FeedView you={YOU} isAdmin={false} feed={FEED} now={NOW} queued={queuedFixtures()} savedAt={NOW} /></TabShell>
+    ),
+  },
+
+  "saved-player-detail-explanation": {
+    title: "Saved Player Detail needs connection",
+    note: "Choosing a Player keeps the Saved Feed visible and gives an accessible app-styled explanation instead of a browser alert.",
+    render: () => (
+      <TabShell pathname="/"><FeedView you={YOU} isAdmin={false} feed={FEED} now={NOW} queued={noQueue} savedAt={NOW} playerConnectionExplanationPreview /></TabShell>
+    ),
+  },
+
+  "offline-shell-hydrated": {
+    title: "Hydrated offline application shell",
+    note: "Server and first client render share a stable route state before the pathname is adopted.",
+    render: () => <OfflineRoute pathnamePreview="/offline" />,
+  },
+
+  "route-error": {
+    title: "Unexpected private route error",
+    note: "Unexpected failures use safe generic copy and a re-fetching retry rather than being mislabeled as connectivity loss.",
+    render: () => <TabShell pathname="/"><PrivateRouteError error={new Error("fixture")} retry={() => undefined} /></TabShell>,
   },
 
   "no-saved-data": {

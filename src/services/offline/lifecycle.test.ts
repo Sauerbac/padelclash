@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createOfflineLifecycle,
+  OPERATION_TIMEOUT_MS,
   type OfflineLifecycleDependencies,
 } from "./lifecycle";
 import type { QueuedMatch } from "./queue-contract";
@@ -11,6 +12,7 @@ function dependencies(
   return {
     contactSession: vi.fn().mockResolvedValue({
       bound: true,
+      bindingId: "binding-1",
       player: { id: "player-1", name: "Alex" },
       revoked: false,
     }),
@@ -24,6 +26,7 @@ function dependencies(
     clearSnapshot: vi.fn().mockResolvedValue(undefined),
     clearSavedViews: vi.fn().mockResolvedValue(undefined),
     snapshotPlayerId: vi.fn().mockResolvedValue("player-1"),
+    savedViewBindingId: vi.fn().mockResolvedValue("binding-1"),
     refreshSnapshot: vi.fn().mockResolvedValue(undefined),
     listQueuedMatches: vi.fn().mockResolvedValue([]),
     submitMatch: vi.fn(),
@@ -81,6 +84,7 @@ describe("offline lifecycle", () => {
 
     resolveContact({
       bound: true,
+      bindingId: "binding-1",
       player: { id: "player-1", name: "Alex" },
       revoked: false,
     });
@@ -108,8 +112,8 @@ describe("offline lifecycle", () => {
     const clearSavedViews = vi.fn().mockResolvedValue(undefined);
     const contactSession = vi
       .fn()
-      .mockResolvedValueOnce({ bound: false, player: null, revoked: true })
-      .mockResolvedValueOnce({ bound: false, player: null, revoked: false });
+      .mockResolvedValueOnce({ bound: false, bindingId: null, player: null, revoked: true })
+      .mockResolvedValueOnce({ bound: false, bindingId: null, player: null, revoked: false });
     const lifecycle = createOfflineLifecycle(
       dependencies({
         contactSession,
@@ -151,6 +155,7 @@ describe("offline lifecycle", () => {
       dependencies({
         contactSession: vi.fn().mockResolvedValue({
           bound: true,
+          bindingId: "binding-1",
           player: { id: "player-1", name: "Alex" },
           revoked: false,
         }),
@@ -165,10 +170,10 @@ describe("offline lifecycle", () => {
     await lifecycle.trigger();
 
     expect(cleanupLatch.clear).toHaveBeenCalledOnce();
-    expect(refreshSnapshot).toHaveBeenCalledWith({
-      id: "player-1",
-      name: "Alex",
-    });
+    expect(refreshSnapshot).toHaveBeenCalledWith(
+      { id: "player-1", name: "Alex" },
+      expect.any(AbortSignal),
+    );
     expect(submitMatch).toHaveBeenCalledWith(match);
     expect(removeQueuedMatch).toHaveBeenCalledWith(match.id);
   });
@@ -181,6 +186,7 @@ describe("offline lifecycle", () => {
     const lifecycle = createOfflineLifecycle(dependencies({
       contactSession: vi.fn().mockResolvedValue({
         bound: true,
+        bindingId: "binding-2",
         player: { id: "player-2", name: "Blair" },
         revoked: false,
       }),
@@ -199,7 +205,36 @@ describe("offline lifecycle", () => {
 
     expect(clearSavedViews).toHaveBeenCalledBefore(refreshSnapshot);
     expect(clearSnapshot).toHaveBeenCalledBefore(refreshSnapshot);
-    expect(refreshSnapshot).toHaveBeenCalledWith({ id: "player-2", name: "Blair" });
+    expect(refreshSnapshot).toHaveBeenCalledWith(
+      { id: "player-2", name: "Blair" },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("clears projections when the same Player receives a replacement Device Binding", async () => {
+    let owed = false;
+    const clearSavedViews = vi.fn().mockResolvedValue(undefined);
+    const refreshSnapshot = vi.fn().mockResolvedValue(undefined);
+    const lifecycle = createOfflineLifecycle(dependencies({
+      contactSession: vi.fn().mockResolvedValue({
+        bound: true,
+        bindingId: "binding-new",
+        player: { id: "player-1", name: "Alex" },
+        revoked: false,
+      }),
+      savedViewBindingId: vi.fn().mockResolvedValue("binding-old"),
+      cleanupLatch: {
+        set: vi.fn(() => { owed = true; }),
+        pending: vi.fn(() => owed),
+        clear: vi.fn(() => { owed = false; }),
+      },
+      clearSavedViews,
+      refreshSnapshot,
+    }));
+
+    await lifecycle.trigger();
+
+    expect(clearSavedViews).toHaveBeenCalledBefore(refreshSnapshot);
   });
 
   it("preserves ownership when a different Player receives identity-mismatch", async () => {
@@ -218,6 +253,7 @@ describe("offline lifecycle", () => {
       dependencies({
         contactSession: vi.fn().mockResolvedValue({
           bound: true,
+          bindingId: "binding-2",
           player: { id: "player-after-rebind", name: "Blair" },
           revoked: false,
         }),
@@ -329,6 +365,93 @@ describe("offline lifecycle", () => {
 
     expect(removeQueuedMatch).not.toHaveBeenCalled();
     expect(noteRefusal).not.toHaveBeenCalled();
+  });
+
+  it("schedules a retry when session contact fails", async () => {
+    const scheduleRetry = vi.fn().mockReturnValue(() => undefined);
+    const lifecycle = createOfflineLifecycle(
+      dependencies({
+        contactSession: vi.fn().mockRejectedValue(new Error("offline")),
+        scheduleRetry,
+      }),
+    );
+
+    await lifecycle.trigger();
+
+    expect(scheduleRetry).toHaveBeenCalledOnce();
+    expect(scheduleRetry.mock.calls[0][1]).toBe(60_000);
+  });
+
+  it("cancels a scheduled contact retry when disposed", async () => {
+    const cancelRetry = vi.fn();
+    const lifecycle = createOfflineLifecycle(
+      dependencies({
+        contactSession: vi.fn().mockRejectedValue(new Error("offline")),
+        scheduleRetry: vi.fn().mockReturnValue(cancelRetry),
+      }),
+    );
+
+    await lifecycle.trigger();
+    lifecycle.dispose();
+
+    expect(cancelRetry).toHaveBeenCalledOnce();
+  });
+
+  it("allows a six-second session response to refresh and drain the queue", async () => {
+    vi.useFakeTimers();
+    const refreshSnapshot = vi.fn().mockResolvedValue(undefined);
+    const submitMatch = vi.fn().mockResolvedValue({ ok: true });
+    const lifecycle = createOfflineLifecycle(dependencies({
+      contactSession: vi.fn(() => new Promise<Awaited<ReturnType<OfflineLifecycleDependencies["contactSession"]>>>((resolve) => setTimeout(() => resolve({
+        bound: true,
+        bindingId: "binding-1",
+        player: { id: "player-1", name: "Alex" },
+        revoked: false,
+      }), 6_000))),
+      refreshSnapshot,
+      listQueuedMatches: vi.fn().mockResolvedValue([queuedMatch()]),
+      submitMatch,
+    }));
+
+    const run = lifecycle.trigger();
+    await vi.advanceTimersByTimeAsync(6_000);
+    await run;
+
+    expect(refreshSnapshot).toHaveBeenCalledOnce();
+    expect(submitMatch).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it("aborts obsolete remote contact when disposed", async () => {
+    let observedSignal!: AbortSignal;
+    const lifecycle = createOfflineLifecycle(dependencies({
+      contactSession: vi.fn((signal) => {
+        observedSignal = signal;
+        return new Promise<Awaited<ReturnType<OfflineLifecycleDependencies["contactSession"]>>>(() => undefined);
+      }),
+    }));
+
+    void lifecycle.trigger();
+    await vi.waitFor(() => expect(observedSignal).toBeDefined());
+    lifecycle.dispose();
+
+    expect(observedSignal.aborted).toBe(true);
+  });
+
+  it("times out a truly hung contact and schedules recovery", async () => {
+    vi.useFakeTimers();
+    const scheduleRetry = vi.fn().mockReturnValue(() => undefined);
+    const lifecycle = createOfflineLifecycle(dependencies({
+      contactSession: vi.fn(() => new Promise<Awaited<ReturnType<OfflineLifecycleDependencies["contactSession"]>>>(() => undefined)),
+      scheduleRetry,
+    }));
+
+    const run = lifecycle.trigger();
+    await vi.advanceTimersByTimeAsync(OPERATION_TIMEOUT_MS);
+    await run;
+
+    expect(scheduleRetry).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
   it("coalesces concurrent triggers without overlapping submissions", async () => {

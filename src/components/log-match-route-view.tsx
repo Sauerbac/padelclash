@@ -7,15 +7,17 @@ export function LogMatchRouteView({
   reservedPlayerNames,
   logger,
   sharedMatchCounts,
+  bindingId,
 }: {
   roster: { id: string; name: string }[];
   reservedPlayerNames: string[];
   logger: { id: string; name: string } | null;
   sharedMatchCounts: SharedMatchCounts;
+  bindingId: string | null;
 }) {
   return (
     <>
-      <RememberViewerScope bindingPlayerId={logger?.id ?? null} />
+      <RememberViewerScope bindingId={bindingId} playerId={logger?.id} />
       <LogMatchView
         roster={roster}
         reservedPlayerNames={reservedPlayerNames}

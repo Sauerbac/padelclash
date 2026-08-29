@@ -2,22 +2,27 @@
 
 import { createContext, useContext } from "react";
 
-const PlayerNavigationNeedsConnection = createContext(false);
+const PlayerNavigationState = createContext({
+  needsConnection: false,
+  explanationPreview: false,
+});
 
 export function PlayerNavigationProvider({
   needsConnection,
+  explanationPreview = false,
   children,
 }: {
   needsConnection: boolean;
+  explanationPreview?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <PlayerNavigationNeedsConnection.Provider value={needsConnection}>
+    <PlayerNavigationState.Provider value={{ needsConnection, explanationPreview }}>
       {children}
-    </PlayerNavigationNeedsConnection.Provider>
+    </PlayerNavigationState.Provider>
   );
 }
 
-export function usePlayerNavigationNeedsConnection(): boolean {
-  return useContext(PlayerNavigationNeedsConnection);
+export function usePlayerNavigationState() {
+  return useContext(PlayerNavigationState);
 }

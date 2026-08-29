@@ -63,6 +63,16 @@ when none exists. Saved cards expose no edit/delete action, and selecting a
 Player explains that Player Detail needs a connection while preserving Feed.
 Fresh data replaces the Saved View atomically and restores current permissions.
 Admin-without-binding never creates or consumes this Player-scoped fallback.
+The explanation is an accessible app-styled inline status, not a blocking
+browser alert, and is represented as its own gallery state.
+Device-local pending and refused queue cards remain visible above a Saved Feed;
+the degraded server projection must never hide durable local Matches.
+
+An unexpected private-route render failure uses a shared generic error state
+rather than describing every exception as a connection problem. It preserves
+local matches, reports only a safe error identifier to the console, and its
+`Try again` action re-fetches the Server Component. The Feed gallery owns this
+shared private-route error fixture.
 
 ## Device identity states
 

@@ -7,19 +7,9 @@ import { FeedView } from "@/components/feed-view";
 import { LeaderboardView } from "@/components/leaderboard-view";
 import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { createSlowConnectionClock } from "@/lib/slow-connection";
-import { loadSavedView, loadViewerScope, type SavedView } from "@/services/offline/saved-views";
+import { loadSavedView, loadViewerScope, type SavedView, type SavedViewKind } from "@/services/offline/saved-views";
 import { loadOfflineMatchSnapshot } from "@/services/offline/snapshot";
-import type { FeedMatch, LeaderboardEntry } from "@/services/matches";
 import { createLatestAttemptGate } from "@/lib/latest-attempt";
-
-type FeedProjection = {
-  you: { id: string; name: string };
-  feed: FeedMatch[];
-};
-type LeaderboardProjection = {
-  youId: string;
-  entries: LeaderboardEntry[];
-};
 
 export function SavedViewFallback({
   kind,
@@ -28,7 +18,7 @@ export function SavedViewFallback({
   kind: "feed" | "leaderboard";
   immediate?: boolean;
 }) {
-  const [fallback, setFallback] = useState<SavedView | null>();
+  const [fallback, setFallback] = useState<SavedView<SavedViewKind> | null>();
   const gate = useRef(createLatestAttemptGate());
 
   useEffect(() => {
@@ -42,7 +32,7 @@ export function SavedViewFallback({
         }
         const snapshot = await loadOfflineMatchSnapshot();
         const saved = snapshot?.player.id === scope.playerId
-          ? await loadSavedView(kind, scope.playerId)
+          ? await loadSavedView(kind, scope.bindingId)
           : null;
         current.publish(() => setFallback(saved));
       } catch {
@@ -68,19 +58,18 @@ export function SavedViewFallback({
 
   const refreshedAt = new Date(fallback.refreshedAt);
   if (kind === "feed") {
-    const projection = fallback.projection as FeedProjection;
+    const projection = fallback.projection as SavedView<"feed">["projection"];
     return (
       <FeedView
         you={projection.you}
         isAdmin={false}
         feed={projection.feed}
         now={refreshedAt}
-        queued={<></>}
         savedAt={refreshedAt}
       />
     );
   }
-  const projection = fallback.projection as LeaderboardProjection;
+  const projection = fallback.projection as SavedView<"leaderboard">["projection"];
   return (
     <LeaderboardView
       entries={projection.entries}

@@ -3,55 +3,88 @@ import { POOR_CONNECTION_MS } from "../../lib/slow-connection";
 export type ResilientCreateResult<T> =
   | { kind: "submitted"; result: T }
   | { kind: "refused"; result: T }
-  | { kind: "queued" };
+  | { kind: "queued" }
+  | { kind: "not-durable" };
 
-export async function submitResilientCreate<T extends { ok: boolean }>({
+type CreateResult =
+  | { ok: true }
+  | { ok: false; code: string; error: string };
+
+export async function submitResilientCreate<T extends CreateResult>({
   id,
   definitelyOffline,
   submit,
   enqueue,
   removeQueued,
+  noteRefusal,
   onQueued,
+  onLateSettled,
 }: {
   id: string;
   definitelyOffline: boolean;
   submit(): Promise<T>;
   enqueue(): Promise<void>;
   removeQueued(id: string): Promise<void>;
+  noteRefusal(id: string, code: Extract<T, { ok: false }>["code"], error: string): Promise<void>;
   onQueued(): void;
+  onLateSettled?(result: T): void;
 }): Promise<ResilientCreateResult<T>> {
-  let queuePromise: Promise<void> | null = null;
-  const queue = () => {
-    if (!queuePromise) {
-      queuePromise = enqueue().then(() => onQueued());
+  const queue = async (): Promise<ResilientCreateResult<T>> => {
+    try {
+      await enqueue();
+      onQueued();
+      return { kind: "queued" };
+    } catch {
+      return { kind: "not-durable" };
     }
-    return queuePromise;
   };
 
   if (definitelyOffline) {
-    await queue();
-    return { kind: "queued" };
+    return queue();
   }
 
-  const timer = setTimeout(() => void queue(), POOR_CONNECTION_MS);
-  try {
-    const result = await submit();
-    clearTimeout(timer);
-    if (result.ok) {
-      if (queuePromise) {
-        await queuePromise;
-        await removeQueued(id);
-      }
-      return { kind: "submitted", result };
+  const submission = submit();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<"slow">((resolve) => {
+    timer = setTimeout(() => resolve("slow"), POOR_CONNECTION_MS);
+  });
+  const foreground = await Promise.race([
+    submission.then(
+      (result) => ({ kind: "response" as const, result }),
+      () => ({ kind: "network-failure" as const }),
+    ),
+    slow,
+  ]);
+
+  if (foreground !== "slow") {
+    if (timer) clearTimeout(timer);
+    if (foreground.kind === "response") {
+      return foreground.result.ok
+        ? { kind: "submitted", result: foreground.result }
+        : { kind: "refused", result: foreground.result };
     }
-    if (queuePromise) {
-      await queuePromise;
-      return { kind: "queued" };
-    }
-    return { kind: "refused", result };
-  } catch {
-    clearTimeout(timer);
-    await queue();
-    return { kind: "queued" };
+    return queue();
   }
+
+  const queued = await queue();
+  if (queued.kind !== "queued") return queued;
+
+  // The form is released as soon as IndexedDB confirms durability. The late
+  // request belongs to this module from here on and can only reconcile the
+  // same Match id; it never reports into a later form attempt.
+  void submission
+    .then(async (result) => {
+      if (result.ok) {
+        await removeQueued(id);
+      } else {
+        await noteRefusal(
+          id,
+          result.code as Extract<T, { ok: false }>["code"],
+          result.error,
+        );
+      }
+      onLateSettled?.(result);
+    })
+    .catch(() => undefined);
+  return queued;
 }

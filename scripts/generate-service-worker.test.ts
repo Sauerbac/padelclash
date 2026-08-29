@@ -22,6 +22,13 @@ describe("generated service worker", () => {
     expect(source).not.toContain("AbortController");
     expect(source).toContain('pathname === "/leaderboard"');
     expect(source).toContain("Promise.race([network, deadline])");
-    expect(source).toContain('type: "navigation-ready"');
+    expect(source).toContain("event.waitUntil(networkCompletion");
+    expect(source).toContain("NAVIGATION_CACHE");
+    expect(source).toContain("response.ok");
+    expect(source).toContain('type !== "navigation-status"');
+    expect(source).toContain("response.clone()");
+    expect(source).toContain("takeRecoveredNavigation");
+    expect(source).not.toContain('new Response("ready")');
+    expect(source).not.toContain('type === "navigation-consume"');
   });
 });

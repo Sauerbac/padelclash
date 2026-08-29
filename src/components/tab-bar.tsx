@@ -61,7 +61,7 @@ export function TabBar({
           className={textTab(feedActive)}
         >
           Feed
-          <TabTransitionFallback destination="feed" />
+          <TabTransitionFallback />
         </Link>
         <div className="relative flex-1">
           {feedActive && (
@@ -86,7 +86,7 @@ export function TabBar({
             className="absolute -top-3.5 left-1/2 z-10 w-24 -translate-x-1/2 skew-x-[-8deg] -rotate-2 border-b-[3px] border-accent bg-primary py-3 text-center font-display text-base tracking-[1px] whitespace-nowrap text-primary-foreground uppercase"
           >
             Log
-            <TabTransitionFallback destination="log" />
+            <TabTransitionFallback />
           </Link>
         </div>
         <Link
@@ -99,7 +99,7 @@ export function TabBar({
           className={textTab(rankingsActive)}
         >
           Rankings
-          <TabTransitionFallback destination="leaderboard" />
+          <TabTransitionFallback />
         </Link>
       </div>
     </nav>
