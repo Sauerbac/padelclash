@@ -6,22 +6,9 @@
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  // PostgreSQL and its Node driver must never enter an Edge bundle.
-  const { runMigrations } = await import("./services/db/migrate");
-  const { rebuildRatingProjections } = await import("./services/matches");
-  const { getDb } = await import("./services/db");
-
-  await runMigrations();
-
-  // Projections are cache, the log is the truth (AGENTS.md), so a rebuild here
-  // makes a Rating formula change deployable without a data migration — the
-  // whole history is re-derived under whatever engine this build ships.
-  // Fatal on failure: serving silently stale Ratings is worse than not booting.
-  try {
-    await rebuildRatingProjections(getDb());
-    console.log("Rating projections rebuilt");
-  } catch (err) {
-    console.error("Fatal: Rating projection rebuild failed at boot:", err);
-    process.exit(1);
-  }
+  // Keep every Node-only API behind this conditional import. Next analyzes this
+  // shared entry point for Edge compatibility before eliminating runtime
+  // branches, so even unreachable Node APIs here produce build warnings.
+  const { registerNodeServer } = await import("./instrumentation.node");
+  await registerNodeServer();
 }
