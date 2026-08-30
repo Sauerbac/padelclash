@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { TabTransitionFallback } from "@/components/tab-transition-fallback";
 
 /**
  * The bottom tab bar (design "TabBar + LogPlate"): FEED and RANKINGS as
@@ -61,7 +60,6 @@ export function TabBar({
           className={textTab(feedActive)}
         >
           Feed
-          <TabTransitionFallback />
         </Link>
         <div className="relative flex-1">
           {feedActive && (
@@ -86,7 +84,6 @@ export function TabBar({
             className="absolute -top-3.5 left-1/2 z-10 w-24 -translate-x-1/2 skew-x-[-8deg] -rotate-2 border-b-[3px] border-accent bg-primary py-3 text-center font-display text-base tracking-[1px] whitespace-nowrap text-primary-foreground uppercase"
           >
             Log
-            <TabTransitionFallback />
           </Link>
         </div>
         <Link
@@ -99,7 +96,6 @@ export function TabBar({
           className={textTab(rankingsActive)}
         >
           Rankings
-          <TabTransitionFallback />
         </Link>
       </div>
     </nav>

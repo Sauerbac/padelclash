@@ -65,6 +65,10 @@ Conventions:
   silhouette of the bar and raised centre Log plate, rising around the plate
   before rejoining the bar. It is knowingly the one soft shadow treatment in
   an otherwise flat theme, kept tight so it reads as a lip rather than a glow.
+- Selecting a main tab changes its active styling immediately. Tab labels have
+  no separate inline pending dot, spinner, or badge; destination loading and
+  recovery surfaces communicate longer waits without changing label geometry
+  (spec decision 157).
 - Spec decision 86 anchors the tab bar to the
   viewport rather than letting it participate in page scroll. Its controls sit
   above the bottom safe area and the tab shell reserves the full occupied
