@@ -31,4 +31,13 @@ describe("generated service worker", () => {
     expect(source).not.toContain('new Response("ready")');
     expect(source).not.toContain('type === "navigation-consume"');
   });
+
+  it("pre-caches and serves the feed logo from the app shell cache", () => {
+    const source = renderServiceWorker("build-abc");
+
+    expect(source).toContain('const SHELL_ASSETS = ["/logo.svg"]');
+    expect(source).toContain("cache.addAll(SHELL_ASSETS)");
+    expect(source).toContain("SHELL_ASSETS.includes(url.pathname)");
+    expect(source).toContain("cached || fetch(request)");
+  });
 });

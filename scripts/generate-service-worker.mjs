@@ -7,6 +7,7 @@ const VERSION = __BUILD_ID__;
 const SHELL_CACHE = "padelclash-shell-" + VERSION;
 const NAVIGATION_CACHE = "padelclash-navigation-" + VERSION;
 const OFFLINE_SHELL = "/offline";
+const SHELL_ASSETS = ["/logo.svg"];
 const NAVIGATION_DEADLINE_MS = 5_000;
 const NEVER_HANDLE = [/^\/api\//, /^\/admin/, /^\/join\//];
 
@@ -50,7 +51,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/_next/static/")) {
+  if (SHELL_ASSETS.includes(url.pathname) || url.pathname.startsWith("/_next/static/")) {
     event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
   }
 });
@@ -79,6 +80,7 @@ async function installShell() {
   const cache = await caches.open(SHELL_CACHE);
   await cache.put(OFFLINE_SHELL, response);
   await cache.addAll(Array.from(new Set(assets)));
+  await cache.addAll(SHELL_ASSETS);
 }
 
 async function navigate(network, pathname, markFallbackShown) {

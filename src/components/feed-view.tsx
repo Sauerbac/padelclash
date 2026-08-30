@@ -63,15 +63,17 @@ export function FeedView({
           kicker="Your club. Your receipts."
           title="PadelClash"
           actions={
-            <Image
-              src="/logo.svg"
-              alt=""
-              width={72}
-              height={72}
-              priority
-              unoptimized
-              className="shrink-0"
-            />
+            <div className="size-18 shrink-0" aria-hidden>
+              <Image
+                src="/logo.svg"
+                alt=""
+                width={72}
+                height={72}
+                priority
+                unoptimized
+                className="size-full"
+              />
+            </div>
           }
         />
 
