@@ -1,6 +1,6 @@
 import type { EditableMatch } from "@/components/match-form";
 import type { WriteWait } from "@/lib/use-prolonged-write";
-import { ConnectionRequiredLoading } from "@/components/connection-required-loading";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { TabShell } from "@/components/tab-shell";
 import {
   FixtureEditActionState,
@@ -84,9 +84,9 @@ const WRITE_WAIT_CASES: Record<WriteWait, ScreenCase> = {
 export const EDIT_CASES: Record<string, ScreenCase> = {
   ...WRITE_WAIT_CASES,
   loading: {
-    title: "Edit Match contacting server",
-    note: "The online-only edit route names its destination while it waits and never renders a Feed fallback.",
-    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><ConnectionRequiredLoading title="Edit Match" /></TabShell>,
+    title: "Edit Match skeleton",
+    note: "The form-shaped loading surface matches the app-wide skeleton language without suggesting that editing is ready.",
+    render: () => <TabShell pathname={`/matches/${EDITING.id}/edit`}><ScreenSkeleton kind="edit" /></TabShell>,
   },
   locked: {
     title: "Permission-locked Match",

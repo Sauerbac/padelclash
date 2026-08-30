@@ -1,5 +1,5 @@
-import { ConnectionRequiredLoading } from "@/components/connection-required-loading";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 
 export default function Loading() {
-  return <ConnectionRequiredLoading title="Player Detail" />;
+  return <ScreenSkeleton kind="player" />;
 }

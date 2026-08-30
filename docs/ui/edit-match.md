@@ -1,7 +1,7 @@
 # Edit Match
 
 **States: [`/dev/gallery/edit`](../../src/app/dev/gallery/[section]/page.tsx)** —
-connection-required loading, editable, locked and successful-correction states
+form skeleton, editable, locked and successful-correction states
 through the production loading/view components.
 
 ## Identity
@@ -19,8 +19,9 @@ and can therefore change the rating history of later matches.
 
 ## Current structural layout
 
-While this online-only route contacts the server, it shows an Edit Match-titled
-connection-required loading card rather than an inherited Feed Saved View.
+While this online-only route contacts the server, it shows an Edit Match form-
+shaped skeleton using the same loading language as the other read-dependent
+destinations rather than an inherited Feed Saved View.
 
 ### Editable state
 

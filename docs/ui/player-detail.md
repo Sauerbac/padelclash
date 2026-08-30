@@ -1,7 +1,7 @@
 # Player Detail
 
 **States: [`/dev/gallery/player`](../../src/app/dev/gallery/[section]/page.tsx)** —
-connection-required loading, active, Retired and no-history profiles through
+profile skeleton, active, Retired and no-history profiles through
 the production loading/view components.
 
 ## Identity
@@ -19,9 +19,10 @@ records, and personal match history.
 
 ## Current structural layout
 
-While this online-only route contacts the server, it shows a Player
-Detail-titled connection-required loading card. It never inherits the Feed
-Saved View.
+While this online-only route contacts the server, it shows a profile-shaped
+skeleton using the same loading language as Feed and Rankings. It does not
+invent a Player Name while the route parameter is being resolved, and it never
+inherits the Feed Saved View.
 
 1. Player heading and status badges.
 2. Three-stat summary card.

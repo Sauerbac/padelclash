@@ -1,5 +1,5 @@
 import { PlayerDetailView } from "@/components/player-detail-view";
-import { ConnectionRequiredLoading } from "@/components/connection-required-loading";
+import { ScreenSkeleton } from "@/components/screen-skeleton";
 import { TabShell } from "@/components/tab-shell";
 import type { PlayerDetail } from "@/services/matches";
 import type { ScreenCase } from "../screen-cases";
@@ -51,9 +51,9 @@ const FULL: PlayerDetail = {
 
 export const PLAYER_CASES: Record<string, ScreenCase> = {
   loading: {
-    title: "Player Detail contacting server",
-    note: "This connection-required route never masquerades as a Feed Saved View while loading.",
-    render: () => <TabShell pathname={`/players/${YOU.id}`}><ConnectionRequiredLoading title="Player Detail" /></TabShell>,
+    title: "Player Detail skeleton",
+    note: "The profile-shaped loading surface matches the app-wide skeleton language without inventing Player data.",
+    render: () => <TabShell pathname={`/players/${YOU.id}`}><ScreenSkeleton kind="player" /></TabShell>,
   },
   active: {
     title: "Active Player with complete history",
