@@ -4,6 +4,7 @@ import type { RosterStatus } from "@/components/log-match-view";
 import {
   FixtureLogActionState,
   FixtureLogMatchView as LogMatchView,
+  FixtureOpenParticipantPicker,
 } from "../screen-fixtures-client";
 import type { ScreenCase } from "../screen-cases";
 import {
@@ -34,6 +35,27 @@ const VALID_DRAFT: MatchFormDraft = {
 
 const LOG_PAYOFF = [
   ...PAYOFF,
+  {
+    playerId: LONG.id,
+    name: LONG.name,
+    side: "B" as const,
+    ratingBefore: 1130,
+    delta: -15,
+    ratingAfter: 1115,
+  },
+];
+
+const NEXT_PAYOFF = [
+  PAYOFF[0],
+  {
+    playerId: INGRID.id,
+    name: INGRID.name,
+    side: "A" as const,
+    ratingBefore: 1184,
+    delta: 15,
+    ratingAfter: 1199,
+  },
+  PAYOFF[1],
   {
     playerId: LONG.id,
     name: LONG.name,
@@ -77,6 +99,83 @@ const LONG_NAME_DRAFT: MatchFormDraft = {
   sets: null,
 };
 
+const PICKER_SWAP_DRAFT: MatchFormDraft = {
+  sides: {
+    A: [
+      { kind: "player", playerId: YOU.id },
+      { kind: "player", playerId: INGRID.id },
+    ],
+    B: [
+      { kind: "player", playerId: CASEY.id },
+      { kind: "player", playerId: LONG.id },
+    ],
+  },
+  winnerSide: "A",
+  sets: null,
+};
+
+const FOUR_PLAYER_DRAFT: MatchFormDraft = {
+  sides: PICKER_SWAP_DRAFT.sides,
+  winnerSide: "A",
+  sets: null,
+};
+
+const TWO_GUEST_DRAFT: MatchFormDraft = {
+  sides: {
+    A: [{ kind: "player", playerId: YOU.id }, { kind: "guest", name: "Mira" }],
+    B: [{ kind: "player", playerId: CASEY.id }, { kind: "guest", name: "Noor" }],
+  },
+  winnerSide: "A",
+  sets: null,
+};
+
+const SINGLES_DRAFT: MatchFormDraft = {
+  sides: {
+    A: [{ kind: "player", playerId: YOU.id }],
+    B: [{ kind: "player", playerId: CASEY.id }],
+  },
+  winnerSide: "A",
+  sets: null,
+};
+
+const TWO_PLAYER_PAYOFF = NEXT_PAYOFF.filter(
+  ({ playerId }) => playerId === YOU.id || playerId === CASEY.id,
+);
+
+const LONG_NAME_PAYOFF = NEXT_PAYOFF.map((delta, index) => ({
+  ...delta,
+  playerId: LONG_NAME_ROSTER[index].id,
+  name: LONG_NAME_ROSTER[index].name,
+}));
+
+const NEXT_MATCH_CASES: Record<string, ScreenCase> = {
+  "next-online": {
+    title: "Next match · online payoff",
+    note: "The selected gold-outline treatment beneath the real four-Player Rating payoff.",
+    render: () => <TabShell pathname="/log"><FixtureLogActionState roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={FOUR_PLAYER_DRAFT} scenario="success" payoff={NEXT_PAYOFF} /></TabShell>,
+  },
+  "next-queued": {
+    title: "Next match · queued confirmation",
+    note: "The same actions remain visually separate from sober queue-status copy.",
+    render: () => <TabShell pathname="/log"><FixtureLogActionState roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={FOUR_PLAYER_DRAFT} scenario="offline" payoff={NEXT_PAYOFF} /></TabShell>,
+  },
+  "next-long-names": {
+    title: "Next match · long Player Names",
+    note: "Four deliberately long names at every supported phone width.",
+    render: () => <TabShell pathname="/log"><FixtureLogActionState roster={LONG_NAME_ROSTER} reservedPlayerNames={LONG_NAME_ROSTER.map(({ name }) => name)} logger={LONG_NAME_LOGGER} initialDraft={LONG_NAME_DRAFT} scenario="success" payoff={LONG_NAME_PAYOFF} /></TabShell>,
+  },
+  "next-two-guests": {
+    title: "Next match · two Guests",
+    note: "The invalid Guest partnership is omitted, leaving one changed pairing and Same teams.",
+    render: () => <TabShell pathname="/log"><FixtureLogActionState roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={TWO_GUEST_DRAFT} scenario="success" payoff={TWO_PLAYER_PAYOFF} /></TabShell>,
+  },
+  "next-singles": {
+    title: "Next match · singles",
+    note: "Same players plus the ordinary Choose different players escape hatch.",
+    render: () => <TabShell pathname="/log"><FixtureLogActionState roster={ROSTER} reservedPlayerNames={RESERVED_NAMES} logger={YOU} initialDraft={SINGLES_DRAFT} scenario="success" payoff={TWO_PLAYER_PAYOFF} /></TabShell>,
+  },
+};
+
 const ROSTER_CASES: Record<RosterStatus["kind"], ScreenCase> = {
   live: {
     title: "Fresh roster",
@@ -101,6 +200,21 @@ const ROSTER_CASES: Record<RosterStatus["kind"], ScreenCase> = {
 };
 
 export const LOG_CASES: Record<string, ScreenCase> = {
+  ...NEXT_MATCH_CASES,
+  "occupied-player-swap": {
+    title: "Occupied Player swap picker",
+    note: "Every roster Player remains visible. Occupied choices name their current Side, and selecting one atomically swaps the two slots with a swap-specific accessible name.",
+    render: () => (
+      <TabShell pathname="/log">
+        <FixtureOpenParticipantPicker
+          roster={ROSTER}
+          reservedPlayerNames={RESERVED_NAMES}
+          logger={YOU}
+          initialDraft={PICKER_SWAP_DRAFT}
+        />
+      </TabShell>
+    ),
+  },
   ...ROSTER_CASES,
   recovery: {
     title: "Fresh roster recovered with draft intact",
@@ -168,7 +282,7 @@ export const LOG_CASES: Record<string, ScreenCase> = {
   },
   payoff: {
     title: "Successful online submission",
-    note: "The form is replaced by the rating payoff and Log another match action.",
+    note: "The form is replaced by the rating payoff and Next match launchpad.",
     render: () => (
       <TabShell pathname="/log">
         <FixtureLogActionState

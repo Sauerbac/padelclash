@@ -1,8 +1,8 @@
 # Log Match
 
 **States: [`/dev/gallery/log`](../../src/app/dev/gallery/[section]/page.tsx)** —
-bound, long-name doubles, unbound, refused, queued and successful-payoff states
-use the real prop-driven view and form.
+bound, long-name doubles, unbound, refused, queued, successful-payoff, and
+online/queued Next Match states use the real prop-driven view and form.
 
 ## Identity
 
@@ -81,8 +81,10 @@ deliberately long names at every supported review width.
 
 Each slot is a full-width select control with the placeholder
 `Pick a participant`. The active roster is the Player option source. A Player
-already selected in another slot is removed from the other slot’s options,
-preventing a Player from appearing twice or on both sides.
+already selected in another slot remains visible and is annotated with their
+current Side. Choosing that Player atomically exchanges them with the Player
+in the open slot; the draft never contains the same Player twice. Choosing an
+unassigned Player retains the ordinary replacement behavior.
 
 Available Player options are sorted by how many surviving Matches they share
 with the bound Player, counting Matches as both partners and opponents. Equal
@@ -197,12 +199,31 @@ After a successful new match, replace the form with a result card:
 - One row per roster Player containing the name, exact integer Rating before,
   an arrow, exact integer Rating after, and the signed integer delta. Guests
   receive no Rating output and never appear in the payoff.
-- A `Log another match` action that starts a fresh Match with the submitted
-  singles/doubles format and every participant retained in the same Side and
-  slot. Guest Names are copied as new match-scoped Guest entries. Winner, Set
-  Score state, Match id, and played-at value are cleared/reset, with played-at
-  returning to now. Entering through the Log tab instead still starts the
-  doubles-first form with only the Logger prefilled.
+- A separate `Next match` section beneath the payoff. Its stable section label
+  is followed by one slogan selected randomly when the summary appears. The
+  selected slogan stays unchanged while that summary remains visible; a later
+  summary makes a new independent draw and may repeat the previous line. The
+  curated slogans are:
+
+  - `Same court, new alliances.`
+  - `New teams, fresh excuses.`
+  - `Different players, same problems.`
+  - `New partners, same bragging rights.`
+
+  For doubles, show every unique participant pairing that satisfies the Match
+  rules. Changed pairings come first; the submitted pairing comes last and is
+  marked `Same teams`. An invalid pairing, such as putting two Guests on one
+  Side, is omitted rather than offered and rejected later. Matchup actions use
+  literal participant names and make no claim about balance, strength, or a
+  preferred rotation. Selecting one immediately starts a fresh Match with that
+  format and lineup. For singles, offer `Same players` instead of a pairing
+  list. Both formats end with `Choose different players`, which opens the
+  ordinary doubles-first form with only the Logger preselected.
+
+  Every repeat path clears winner, Set Score state, Match id and played-at
+  value, with played-at returning to now. Copied Guest Names are new
+  match-scoped Guest entries. Entering through the Log tab independently also
+  starts the ordinary doubles-first Logger-only form.
 
 Before that repeated form opens after a successful online log, its frequency
 ordering advances by the new Match wherever the bound Player participated.
@@ -227,9 +248,10 @@ because the server cannot be reached, or five seconds pass without a response:
   slow response.
 - Explain that the match is safe on the device, will sync automatically when
   online, and will appear as pending sync in the Feed.
-- Provide `Log another match`, which resets the form and permits another local
-  match to be queued with the same format and lineup carry-over used after an
-  online log, including copied match-scoped Guest Names.
+- Show the same `Next match` section as the online summary. Its pairing,
+  singles, different-player, random-slogan, and copied match-scoped Guest
+  behavior is identical. The sober queue-status copy remains separate and is
+  never replaced by banter.
 
 If an edit fails while offline, keep the form visible and show
 `You’re offline — edits need a connection.`
@@ -247,3 +269,36 @@ queued`. The form and draft remain visible with an explicit message that the
 server result is still unknown and the device could not save locally. Retrying
 the unchanged draft reuses the same client Match ID, so a late original success
 cannot turn the retry into a duplicate.
+
+## Next Match interaction and accessibility
+
+`Next match` appears only after creating or safely queueing a Match. A
+successful edit retains `Back to feed` and never implies that the edited
+historical lineup is a current session.
+
+Pairing actions must remain compact enough for the existing online payoff at
+320 px, while preserving at least a 44 px touch target and allowing long Player
+Names to wrap or truncate without page-level horizontal overflow. The visible
+banter belongs to the section heading area; pairing labels stay factual. Each
+pairing action has an unambiguous accessible name containing both Sides, such
+as `Choose Alex and Ben versus Casey and Dana`.
+
+The selected presentation is a vertical stack of full-width gold-outline rows.
+Each row places the two Sides around a small centered `VS`; partner names stack
+within their Side, and the submitted pairing carries a small centered
+`Same teams` marker. `Choose different players` uses the same row boundary with
+a quiet `Full roster` cue, so it remains available without competing with the
+pairing choices.
+
+In a participant picker, an occupied roster Player's visible annotation names
+their current Side. Selecting one uses an accessible action name that explains
+the exchange, such as `Swap Alex with Ben`. Guest controls retain their existing
+rules and wording.
+
+The gallery pins an explicit slogan in fixtures even though production chooses
+one randomly, so visual review and screenshots remain stable. It covers the
+Next Match section beneath both a four-Player online Rating payoff and the
+queued confirmation, plus curated singles, Guest-validity, long-name, and
+occupied-Player swap cases. Visual variants may be explored in the gallery,
+but the gallery and this document must describe only the selected production
+treatment in the implementation commit.

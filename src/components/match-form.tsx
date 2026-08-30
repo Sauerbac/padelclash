@@ -16,6 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RatingPayoff } from "@/components/rating-payoff";
+import {
+  NextMatchLaunchpad,
+  randomNextMatchSlogan,
+} from "@/components/next-match-launchpad";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   enqueueMatch,
@@ -29,7 +33,6 @@ import { uuidv7 } from "@/lib/uuidv7";
 import { cn } from "@/lib/utils";
 import {
   addSharedMatchToCounts,
-  removeSelectedPlayers,
   sortPlayersBySharedMatches,
   type SharedMatchCounts,
 } from "@/lib/player-roster";
@@ -38,8 +41,14 @@ import {
   validateMatchIntake,
 } from "@/domain/match-intake";
 import type { MatchParticipant } from "@/domain/match-participant";
+import type { MatchParticipantSides } from "@/domain/next-match";
 import type { SetScore } from "@/domain/set-score";
 import { reconcileDraftRoster } from "@/lib/draft-roster";
+import {
+  occupiedSlotFor,
+  selectParticipantInSlot,
+  sideForSlot,
+} from "@/lib/match-draft-slots";
 import {
   useLogDraftContinuity,
   type MatchDraftSlots,
@@ -57,11 +66,6 @@ type Slot = "a1" | "a2" | "b1" | "b2";
 type DraftParticipant = MatchParticipant | null;
 type Slots = MatchDraftSlots;
 
-interface RepeatLineup {
-  doubles: boolean;
-  slots: Slots;
-}
-
 interface SetRow {
   a: string;
   b: string;
@@ -76,20 +80,6 @@ function toLocalInput(date: Date): string {
 
 function nowLocal(): string {
   return toLocalInput(new Date());
-}
-
-function repeatLineupFromSides(
-  sides: Record<Side, MatchParticipant[]>,
-): RepeatLineup {
-  return {
-    doubles: sides.A.length === 2,
-    slots: {
-      a1: sides.A[0] ?? null,
-      a2: sides.A[1] ?? null,
-      b1: sides.B[0] ?? null,
-      b2: sides.B[1] ?? null,
-    },
-  };
 }
 
 /** An existing match being corrected — switches the form into edit mode. */
@@ -215,7 +205,8 @@ export function MatchForm({
   const [payoff, setPayoff] = useState<PayoffDelta[] | null>(null);
   const [queued, setQueued] = useState(false);
   const [queuedRefusal, setQueuedRefusal] = useState<{ error: string; permanent: boolean } | null>(null);
-  const [repeatLineup, setRepeatLineup] = useState<RepeatLineup | null>(null);
+  const [repeatLineup, setRepeatLineup] = useState<MatchParticipantSides | null>(null);
+  const [visibleNextMatchSlogan, setVisibleNextMatchSlogan] = useState<string | null>(null);
   const activeQueuedAttempt = useRef<string | null>(null);
   const [createId, setCreateId] = useState(uuidv7);
   const { writeWait, begin: beginWriteWait, finish: finishWriteWait } = useProlongedWrite();
@@ -387,7 +378,10 @@ export function MatchForm({
       const showQueued = () => {
         activeQueuedAttempt.current = payload.id;
         setQueuedRefusal(null);
-        setRepeatLineup(repeatLineupFromSides(payload.sides));
+        setRepeatLineup(payload.sides);
+        setVisibleNextMatchSlogan((current) =>
+          current ?? randomNextMatchSlogan(),
+        );
         clearContinuityDraft();
         setQueued(true);
       };
@@ -452,7 +446,8 @@ export function MatchForm({
               ),
             );
           }
-          setRepeatLineup(repeatLineupFromSides(payload.sides));
+          setRepeatLineup(payload.sides);
+          setVisibleNextMatchSlogan(randomNextMatchSlogan());
           clearContinuityDraft();
           setQueued(false);
           setPayoff(result.deltas);
@@ -465,7 +460,7 @@ export function MatchForm({
         const result = await editMatch(payload);
         finishWriteWait();
         if (result.ok) {
-          setRepeatLineup(repeatLineupFromSides(payload.sides));
+          setRepeatLineup(payload.sides);
           setPayoff(result.deltas);
         } else setError(result.error);
       } catch {
@@ -475,18 +470,30 @@ export function MatchForm({
     });
   }
 
-  function reset() {
+  function startFreshMatch(nextSides?: MatchParticipantSides) {
     activeQueuedAttempt.current = null;
     setPayoff(null);
     setQueued(false);
     setQueuedRefusal(null);
-    // Keep the submitted format and lineup for an immediate rematch. Guests
-    // remain new match-scoped entries with the copied name, never identities.
-    if (repeatLineup) {
-      setDoubles(repeatLineup.doubles);
-      setSlots(repeatLineup.slots);
+    if (nextSides) {
+      setDoubles(nextSides.A.length === 2);
+      setSlots({
+        a1: nextSides.A[0] ?? null,
+        a2: nextSides.A[1] ?? null,
+        b1: nextSides.B[0] ?? null,
+        b2: nextSides.B[1] ?? null,
+      });
+    } else {
+      setDoubles(true);
+      setSlots({
+        a1: loggerId ? { kind: "player", playerId: loggerId } : null,
+        a2: null,
+        b1: null,
+        b2: null,
+      });
     }
     setRepeatLineup(null);
+    setVisibleNextMatchSlogan(null);
     setWinner(null);
     setRecordSets(false);
     setSets([{ a: "", b: "" }]);
@@ -494,6 +501,19 @@ export function MatchForm({
     const nextCreateId = uuidv7();
     setCreateId(nextCreateId);
   }
+
+  const playerNames = Object.fromEntries(
+    rosterWithRetainedSelections.map((player) => [player.id, player.name]),
+  );
+  const nextMatchLaunchpad = repeatLineup && visibleNextMatchSlogan ? (
+    <NextMatchLaunchpad
+      submittedSides={repeatLineup}
+      playerNames={playerNames}
+      slogan={visibleNextMatchSlogan}
+      onChoose={startFreshMatch}
+      onChooseDifferent={() => startFreshMatch()}
+    />
+  ) : null;
 
   // The server did not answer promptly; the durable local copy owns recovery.
   if (queued) {
@@ -522,9 +542,7 @@ export function MatchForm({
             )}
           </p>
         </section>
-        <Button onClick={reset} className="w-full">
-          Log another match
-        </Button>
+        {nextMatchLaunchpad}
       </div>
     );
   }
@@ -542,9 +560,7 @@ export function MatchForm({
             <Link href="/">Back to feed</Link>
           </Button>
         ) : (
-          <Button onClick={reset} className="w-full">
-            Log another match
-          </Button>
+          nextMatchLaunchpad
         )}
       </div>
     );
@@ -601,13 +617,6 @@ export function MatchForm({
           <div className="mt-2.5 flex min-w-0 flex-col gap-2">
             {slotsFor(side).map((slot, index) => {
               const selected = slots[slot];
-              const selectedPlayerIds = new Set(
-                Object.entries(slots).flatMap(([key, participant]) =>
-                  key !== slot && participant?.kind === "player"
-                    ? [participant.playerId]
-                    : [],
-                ),
-              );
               const otherSideSlotHasGuest = slotsFor(side).some(
                 (candidate) =>
                   candidate !== slot && slots[candidate]?.kind === "guest",
@@ -618,16 +627,37 @@ export function MatchForm({
                   label={`Side ${side}, participant ${index + 1}`}
                   value={selected}
                   onChange={(participant) =>
-                    setSlots((current) => ({
-                      ...current,
-                      [slot]: participant,
-                    }))
+                    setSlots((current) =>
+                      selectParticipantInSlot(current, activeSlots, slot, participant),
+                    )
                   }
-                  options={removeSelectedPlayers(
-                    orderedRoster,
-                    selectedPlayerIds,
-                    selected?.kind === "player" ? selected.playerId : undefined,
-                  )}
+                  options={orderedRoster.map((player) => {
+                    const occupied = occupiedSlotFor(
+                      slots,
+                      activeSlots,
+                      player.id,
+                      slot,
+                    );
+                    const displacedName = nameOf(selected) ?? "the empty slot";
+                    const rotatesGuests =
+                      occupied &&
+                      selected?.kind === "guest" &&
+                      activeSlots.some(
+                        (candidate) =>
+                          candidate !== occupied &&
+                          sideForSlot(candidate) === sideForSlot(occupied) &&
+                          slots[candidate]?.kind === "guest",
+                      );
+                    return {
+                      ...player,
+                      occupiedSide: occupied ? sideForSlot(occupied) : undefined,
+                      ariaLabel: occupied
+                        ? rotatesGuests
+                          ? `Re-pair ${player.name} while keeping Guests on opposing Sides`
+                          : `Swap ${player.name} with ${displacedName}`
+                        : undefined,
+                    };
+                  })}
                   allowGuest={
                     doubles &&
                     (selected?.kind === "guest" || !otherSideSlotHasGuest)
@@ -832,7 +862,7 @@ function ParticipantSelect({
   label: string;
   value: DraftParticipant;
   onChange: (participant: DraftParticipant) => void;
-  options: RosterEntry[];
+  options: (RosterEntry & { occupiedSide?: Side; ariaLabel?: string })[];
   allowGuest: boolean;
 }) {
   const selectValue =
@@ -856,6 +886,12 @@ function ParticipantSelect({
           ...options.map((player) => ({
             value: `player:${player.id}`,
             label: player.name,
+            ariaLabel: player.ariaLabel,
+            suffix: player.occupiedSide ? (
+              <span className="shrink-0 font-mono text-[9px] tracking-[1px] text-accent">
+                SIDE {player.occupiedSide}
+              </span>
+            ) : undefined,
           })),
           ...(allowGuest
             ? [

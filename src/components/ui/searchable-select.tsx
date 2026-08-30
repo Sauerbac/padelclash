@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 export interface SearchableSelectOption {
   value: string;
   label: string;
+  ariaLabel?: string;
   suffix?: React.ReactNode;
 }
 
@@ -220,6 +221,7 @@ export function SearchableSelect({
                   key={option.value}
                   type="button"
                   role="option"
+                  aria-label={option.ariaLabel}
                   aria-selected={option.value === value}
                   onClick={() => choose(option.value)}
                   onKeyDown={(event) => {

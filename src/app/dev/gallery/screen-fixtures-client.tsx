@@ -64,9 +64,11 @@ const adminActions: AdminViewActions = {
 function AutoClick({
   selector,
   children,
+  fixedRandom = false,
 }: {
   selector: string;
   children: React.ReactNode;
+  fixedRandom?: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const driven = useRef(false);
@@ -74,8 +76,17 @@ function AutoClick({
   useEffect(() => {
     if (driven.current) return;
     driven.current = true;
+    const originalRandom = Math.random;
+    if (fixedRandom) Math.random = () => 0;
     root.current?.querySelector<HTMLButtonElement>(selector)?.click();
-  }, [selector]);
+    const restore = window.setTimeout(() => {
+      if (fixedRandom) Math.random = originalRandom;
+    }, 0);
+    return () => {
+      window.clearTimeout(restore);
+      if (fixedRandom) Math.random = originalRandom;
+    };
+  }, [fixedRandom, selector]);
 
   return <div ref={root}>{children}</div>;
 }
@@ -84,6 +95,16 @@ export function FixtureLogMatchView(
   props: ComponentProps<typeof LogMatchView>,
 ) {
   return <LogMatchView {...props} actions={matchActions} />;
+}
+
+export function FixtureOpenParticipantPicker(
+  props: ComponentProps<typeof LogMatchView>,
+) {
+  return (
+    <AutoClick selector='button[aria-label="Side A, participant 1"]'>
+      <LogMatchView {...props} actions={matchActions} />
+    </AutoClick>
+  );
 }
 
 export function FixtureLogActionState({
@@ -116,7 +137,7 @@ export function FixtureLogActionState({
   };
 
   return (
-    <AutoClick selector="[data-match-submit]">
+    <AutoClick selector="[data-match-submit]" fixedRandom>
       <LogMatchView
         {...props}
         initialDraft={initialDraft}
